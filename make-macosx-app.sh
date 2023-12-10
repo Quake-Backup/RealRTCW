@@ -350,7 +350,9 @@ PLIST="${PLIST}
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSHighResolutionCapable</key>
-    <false/>
+    <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.games</string>
 </dict>
 </plist>
 "
@@ -390,9 +392,7 @@ action "${BUNDLEBINDIR}/${EXECUTABLE_NAME}"				"${IORTCW_CLIENT_ARCHS}"
 
 # renderers
 action "${BUNDLEBINDIR}/${RENDERER_OPENGL1_NAME}"		"${IORTCW_RENDERER_GL1_ARCHS}"
-action "${BUNDLEBINDIR}/${RENDERER_OPENGL2_NAME}"		"${IORTCW_RENDERER_GL2_ARCHS}"
 symlinkArch "${RENDERER_OPENGL}" "${RENDERER_OPENGL}" "_" "${BUNDLEBINDIR}"
-symlinkArch "${RENDERER_OPENGL2}" "${RENDERER_OPENGL2}" "_" "${BUNDLEBINDIR}"
 
 # game
 action "${BUNDLEBINDIR}/${BASEDIR}/${CGAME_NAME}"		"${IORTCW_CGAME_ARCHS}"
