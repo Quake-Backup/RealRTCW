@@ -1309,6 +1309,11 @@ qboolean G_SaveGame( char *username ) {
 		G_SaveWriteError();
 	}
 
+	// write out the globalaccum buffer
+	if ( !G_SaveWrite( ( void * )( (byte *)g_scriptGlobalAccumBuffer ), G_MAX_SCRIPT_GLOBAL_ACCUM_BUFFERS * sizeof( int ), f ) ) {
+		G_SaveWriteError();
+	}
+
 	// write out the client structures
 	i = sizeof( gclient_t );
 	if ( !G_SaveWrite( &i, sizeof( i ), f ) ) {
@@ -1609,6 +1614,9 @@ void G_LoadGame( char *filename ) {
 			ent->inuse = qfalse;
 		}
 
+		// read the globalaccum buffer
+		trap_FS_Read( ( void * )( (byte *)g_scriptGlobalAccumBuffer ), G_MAX_SCRIPT_GLOBAL_ACCUM_BUFFERS * sizeof( int ), f );
+
 		// read the client structures
 		trap_FS_Read( &i, sizeof( i ), f );
 		size = i;
@@ -1833,6 +1841,16 @@ void PersWriteCastState( fileHandle_t f, cast_state_t *cs ) {
 
 /*
 ===============
+PersWriteGlobalAccumBuffer
+===============
+*/
+void PersWriteGlobalAccumBuffer( fileHandle_t f ) {
+	// write the block
+	G_SaveWrite( ( void * )( (byte *)g_scriptGlobalAccumBuffer ), G_MAX_SCRIPT_GLOBAL_ACCUM_BUFFERS * sizeof( int ), f );
+}
+
+/*
+===============
 PersReadCastState
 ===============
 */
@@ -1844,6 +1862,16 @@ void PersReadCastState( fileHandle_t f, cast_state_t *cs ) {
 	{   // read the block
 		trap_FS_Read( ( void * )( (byte *)cs + field->ofs ), field->len, f );
 	}
+}
+
+/*
+===============
+PersReadGlobalAccumBuffer
+===============
+*/
+void PersReadGlobalAccumBuffer( fileHandle_t f ) {
+	// read the block
+	trap_FS_Read( ( void * )( (byte *)g_scriptGlobalAccumBuffer ), G_MAX_SCRIPT_GLOBAL_ACCUM_BUFFERS * sizeof( int ), f );
 }
 
 //=========================================================
@@ -1891,6 +1919,9 @@ qboolean G_SavePersistant( char *nextmap ) {
 
 	// write out the cast_state structure
 	PersWriteCastState( f, AICast_GetCastState( 0 ) );
+
+	// write out the global accums buffer
+	PersWriteGlobalAccumBuffer( f );
 
 	trap_FS_FCloseFile( f );
 
@@ -1961,6 +1992,8 @@ void G_LoadPersistant( void ) {
 
 	// read the cast_state structure
 	PersReadCastState( f, AICast_GetCastState( 0 ) );
+
+	PersReadGlobalAccumBuffer( f );
 
 	trap_FS_FCloseFile( f );
 
