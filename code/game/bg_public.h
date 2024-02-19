@@ -453,6 +453,7 @@ typedef enum {
 	HI_LP_SYRINGE,
 	HI_KNIVES,
 	HI_M97,
+	HI_AUTO5,
 	HI_NUM_HOLDABLE
 } holdable_t;
 
@@ -514,7 +515,8 @@ typedef enum {
 	WP_FG42,
 	WP_BAR,
 	// Shotguns
-	WP_M97, 
+	WP_M97,
+	WP_AUTO5, 
 	// Heavy Weapons
 	WP_BROWNING,
 	WP_MG42M,
@@ -586,6 +588,12 @@ typedef struct ammoTable_s {
 	int upAngle;
 	float falloffDistance[2];
 	int mod;   
+	int shotgunReloadStart;
+	int shotgunReloadLoop;
+	int shotgunReloadEnd;
+	int shotgunPumpStart;
+	int shotgunPumpLoop;
+	int shotgunPumpEnd;
 } ammoTable_t;
 
 // Skill-based ammo parameters
@@ -614,7 +622,7 @@ extern ammoskill_t ammoSkill[GSKILL_NUM_SKILLS][WP_NUM_WEAPONS];
 		weapon == WP_PPSH    || weapon == WP_GARAND      || \
 		weapon == WP_SNOOPERSCOPE  || weapon == WP_REVOLVER || weapon == WP_AKIMBO ||      \
 		weapon == WP_BROWNING || weapon == WP_P38 || weapon == WP_DELISLE ||  \
-        weapon == WP_DELISLESCOPE || weapon == WP_M1941 \
+        weapon == WP_DELISLESCOPE || weapon == WP_M1941 || weapon == WP_AUTO5 \
 	)
 
  // entityState_t->event values
@@ -1127,6 +1135,7 @@ typedef enum {
 	MOD_MG42M,
 	MOD_BROWNING,
 	MOD_M97,
+	MOD_AUTO5,
 	MOD_M30,
 	MOD_WELROD,
 	MOD_REVOLVER,

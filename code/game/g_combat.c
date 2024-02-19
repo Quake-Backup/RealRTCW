@@ -897,9 +897,9 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			// Rafael - had to change this since the
 			// we added a new lvl of diff
 			if ( g_gameskill.integer == GSKILL_EASY ) {
-				damage *= 0.25;
-			} else if ( g_gameskill.integer == GSKILL_MEDIUM ) {
 				damage *= 0.75;
+			} else if ( g_gameskill.integer == GSKILL_MEDIUM ) {
+				damage *= 0.80;
 			} else if ( g_gameskill.integer == GSKILL_HARD ) {
 				damage *= 0.9;
 			} else {
@@ -1243,6 +1243,8 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 		client->damage_armor += asave;
 		client->damage_blood += take;
 		client->damage_knockback += knockback;
+
+		client->healthRegenStartTime = level.time + 5000; // This will reset health regen timer
 
 		if ( dir ) {
 			VectorCopy( dir, client->damage_from );
