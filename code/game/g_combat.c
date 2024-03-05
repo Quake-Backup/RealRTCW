@@ -129,6 +129,9 @@ void TossClientItems( gentity_t *self ) {
 	if ( weapon == WP_AKIMBO ) { //----(SA)	added
 		weapon = WP_COLT;
 	}
+	if ( weapon == WP_DUAL_TT33 ) { //----(SA)	added
+		weapon = WP_TT33;
+	}
 //----(SA)	end
 
 
@@ -590,6 +593,7 @@ qboolean IsHeadShotWeapon( int mod, gentity_t *targ, gentity_t *attacker ) {
 		   if ( mod == MOD_SNIPERRIFLE ||
 			    mod == MOD_SNOOPERSCOPE ||
 			    mod == MOD_DELISLESCOPE ||
+				mod == MOD_M1941SCOPE ||
 			    mod == MOD_MAUSER ) {
 			    return qtrue;
 		        }
@@ -619,11 +623,12 @@ qboolean IsHeadShotWeapon( int mod, gentity_t *targ, gentity_t *attacker ) {
 	case MOD_LUGER:
 	case MOD_COLT:
 	case MOD_AKIMBO:
+	case MOD_DUAL_TT33:
 	case MOD_MP40:
 	case MOD_MP34:
 	case MOD_TT33:
 	case MOD_P38:
-	case MOD_WELROD:
+	case MOD_HDM:
 	case MOD_PPSH:
 	case MOD_MOSIN:
 	case MOD_G43:

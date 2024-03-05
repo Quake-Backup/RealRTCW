@@ -656,9 +656,6 @@ If you have questions concerning this license or the applicable additional terms
 {"G_ScriptAction_MissionSuccess", (byte *)G_ScriptAction_MissionSuccess},
 {"G_ScriptAction_MissionFailed", (byte *)G_ScriptAction_MissionFailed},
 {"G_ScriptAction_Accum", (byte *)G_ScriptAction_Accum},
-{"G_ScriptAction_EnableSpeaker", (byte *)G_ScriptAction_EnableSpeaker},
-{"G_ScriptAction_DisableSpeaker", (byte *)G_ScriptAction_DisableSpeaker},
-{"G_ScriptAction_ToggleSpeaker", (byte *)G_ScriptAction_ToggleSpeaker},
 //1NTERRUPTOR
 { "G_ScriptAction_AccumGameTime", (byte *)G_ScriptAction_AccumGameTime },
 { "G_ScriptAction_AccumAction", (byte *)G_ScriptAction_AccumAction },
@@ -1691,8 +1688,4 @@ If you have questions concerning this license or the applicable additional terms
 {"AICast_ScriptAction_DropWeapon", (byte*)AICast_ScriptAction_DropWeapon},
 {"AICast_ScriptAction_ChangeAiName", (byte*)AICast_ScriptAction_ChangeAiName},
 {"AICast_ScriptAction_ChangeAiTeam", (byte*)AICast_ScriptAction_ChangeAiTeam},
-{"BG_LoadSpeakerScript", (byte *)BG_LoadSpeakerScript},
-{"BG_GetScriptSpeaker", (byte *)BG_GetScriptSpeaker},
-{"BG_NumScriptSpeakers", (byte *)BG_NumScriptSpeakers},
-{"BG_ClearScriptSpeakerPool", (byte *)BG_ClearScriptSpeakerPool},
 {0, 0}

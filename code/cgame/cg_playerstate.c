@@ -73,6 +73,7 @@ void CG_CheckAmmo( void ) {
 		case WP_LUGER:
 		case WP_COLT:
 		case WP_AKIMBO:
+		case WP_DUAL_TT33:
 		case WP_SILENCER:
 		case WP_FG42:
 		case WP_FG42SCOPE:
@@ -88,7 +89,7 @@ void CG_CheckAmmo( void ) {
 		case WP_PPSH:
 		case WP_TT33:
 		case WP_P38:
-		case WP_WELROD:
+		case WP_HDM:
 		case WP_MOSIN:
 		case WP_G43:
 	    case WP_M1GARAND:

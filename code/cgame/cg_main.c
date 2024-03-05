@@ -295,6 +295,7 @@ vmCvar_t cg_ironChallenge;
 vmCvar_t cg_nohudChallenge;
 vmCvar_t cg_nopickupChallenge;
 vmCvar_t cg_decayChallenge;
+vmCvar_t cg_vanilla_plus;
 vmCvar_t cg_autoReload;
 vmCvar_t cg_uinfo;
 vmCvar_t int_cl_maxpackets;
@@ -488,6 +489,8 @@ cvarTable_t cvarTable[] = {
 	{ &cg_nohudChallenge, "g_nohudchallenge", "0", CVAR_SERVERINFO | CVAR_ROM }, 
 	{ &cg_nopickupChallenge, "g_nopickupchallenge", "0", CVAR_SERVERINFO | CVAR_ROM }, 
 	{ &cg_decayChallenge, "g_decaychallenge", "0", CVAR_SERVERINFO | CVAR_ROM }, 
+
+	{ &cg_vanilla_plus, "g_vanilla_plus", "0", CVAR_ARCHIVE }, 
 
 	{ &cg_reloading, "g_reloading", "0", 0 }, //----(SA)	added
 
@@ -1107,19 +1110,10 @@ static void CG_RegisterSounds( void ) {
 	char items[MAX_ITEMS + 1];
 	char name[MAX_QPATH];
 	const char  *soundName;
-	bg_speaker_t *speaker;
 
+	// Ridah, init sound scripts
 	CG_SoundInit();
-
-	BG_ClearScriptSpeakerPool();
-
-	BG_LoadSpeakerScript(va("sound/maps/%s.sps", cgs.mapname));
-
-	for (i = 0; i < BG_NumScriptSpeakers(); i++)
-	{
-		speaker        = BG_GetScriptSpeaker(i);
-		speaker->noise = trap_S_RegisterSound(speaker->filename);
-	}
+	// done.
 
 	cgs.media.n_health = trap_S_RegisterSound( "sound/items/n_health.wav" );
 	cgs.media.noFireUnderwater = trap_S_RegisterSound( "sound/weapons/underwaterfire.wav" ); 

@@ -2247,7 +2247,7 @@ static void PM_BeginWeaponReload( int weapon ) {
 	    } else if ( pm->ps->weaponTime < ammoTable[weapon].reloadTime ) {
 		    pm->ps->weaponTime += ( ammoTable[weapon].reloadTime - pm->ps->weaponTime );
 	      }
-		 PM_AddEvent( EV_FILL_CLIP );
+		 PM_AddEvent( EV_FILL_CLIP_AI );
 	}
 
 	pm->ps->weaponstate = WEAPON_RELOADING;
@@ -2439,6 +2439,7 @@ static void PM_FinishWeaponChange( void ) {
 	case WP_SNIPERRIFLE:
 	case WP_FG42SCOPE:
 	case WP_DELISLESCOPE:
+	case WP_M1941SCOPE:
 		pm->ps->aimSpreadScale = 255;               // initially at lowest accuracy
 		pm->ps->aimSpreadScaleFloat = 255.0f;       // initially at lowest accuracy
 
@@ -2550,6 +2551,10 @@ static void PM_ReloadClip( int weapon ) {
 	if ( weapon == WP_AKIMBO ) { // reload colt too
 		PM_ReloadClip( WP_COLT );
 	}
+
+    if ( weapon == WP_DUAL_TT33 ) { // reload colt too
+		PM_ReloadClip( WP_TT33 );
+	}
 }
 
 /*
@@ -2577,6 +2582,17 @@ static void PM_FinishWeaponReload( void ) {
 }
 
 
+static int isAutoReloadWeapon(int weapon) {
+    int i;
+    for (i = 0; i < sizeof(autoReloadWeapons) / sizeof(int); i++) {
+        if (autoReloadWeapons[i] == weapon) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+
 /*
 ==============
 PM_CheckforReload
@@ -2601,7 +2617,6 @@ void PM_CheckForReload( int weapon ) {
 		case WP_DYNAMITE:
 		case WP_NONE:
 	    case WP_TESLA:
-	    case WP_WELROD:
 	    case WP_DAGGER:
 	    case WP_HOLYCROSS:
 			return;
@@ -2631,7 +2646,8 @@ void PM_CheckForReload( int weapon ) {
 	default:
 		break;
 	}
-    autoreload = pm->pmext->bAutoReload || !IS_AUTORELOAD_WEAPON( weapon ); // autoreload
+
+    autoreload = pm->pmext->bAutoReload || isAutoReloadWeapon( pm->ps->weapon ); // autoreload
 	clipWeap = BG_FindClipForWeapon( weapon );
 	ammoWeap = BG_FindAmmoForWeapon( weapon );
 
@@ -2644,6 +2660,7 @@ void PM_CheckForReload( int weapon ) {
 		case WP_SNIPERRIFLE:
 		case WP_FG42SCOPE:
 		case WP_DELISLESCOPE:
+	    case WP_M1941SCOPE:
             if ( reloadRequested && pm->ps->ammo[ammoWeap] ) {
 			if ( pm->ps->ammoclip[clipWeap] < ammoTable[weapon].maxclip ) {
 			PM_BeginWeaponChange( weapon, ammoTable[weapon].weapAlts, !( pm->ps->ammo[ammoWeap] ) ? qfalse : qtrue );
@@ -2674,19 +2691,42 @@ void PM_CheckForReload( int weapon ) {
 						doReload = qtrue;
 					}
 				}
+
+					if ( weapon == WP_DUAL_TT33 ) {
+					// akimbo should also check Colt status
+					if ( pm->ps->ammoclip[BG_FindClipForWeapon( WP_TT33 )] < ammoTable[BG_FindClipForWeapon( WP_TT33 )].maxclip ) {
+						doReload = qtrue;
+					}
+				}
 			}
 		} else if ( autoreload ) {
 		// clip is empty, but you have reserves.  (auto reload)
 		if ( !( pm->ps->ammoclip[clipWeap] ) ) {    // clip is empty...
-			if ( pm->ps->ammo[ammoWeap] ) {         // and you have reserves
+			if ( pm->ps->ammo[ammoWeap] ) {    
+				
+				
+				
+			    // and you have reserves
 				if ( weapon == WP_AKIMBO ) {    // if colt's got ammo, don't force reload yet (you know you've got it 'out' since you've got the akimbo selected
 					if ( !( pm->ps->ammoclip[WP_COLT] ) ) {
 						doReload = qtrue;
 					}
 					// likewise.  however, you need to check if you've got the akimbo selected, since you could have the colt alone
+				} else if ( weapon == WP_DUAL_TT33 ) {   
+					if ( !( pm->ps->ammoclip[WP_TT33] ) ) {
+						doReload = qtrue;
+					}
 				} else if ( weapon == WP_COLT ) {   // weapon checking for reload is colt...
 					if ( pm->ps->weapon == WP_AKIMBO ) {    // you've got the akimbo selected...
 						if ( !( pm->ps->ammoclip[WP_AKIMBO] ) ) {   // and it's got no ammo either
+							doReload = qtrue;       // so reload
+						}
+					} else {     // single colt selected
+						doReload = qtrue;       // so reload
+					}
+				} else if ( weapon == WP_TT33 ) {   // weapon checking for reload is colt...
+					if ( pm->ps->weapon == WP_DUAL_TT33 ) {    // you've got the akimbo selected...
+						if ( !( pm->ps->ammoclip[WP_DUAL_TT33] ) ) {   // and it's got no ammo either
 							doReload = qtrue;       // so reload
 						}
 					} else {     // single colt selected
@@ -2775,6 +2815,10 @@ void PM_WeaponUseAmmo( int wp, int amount ) {
 			if ( !BG_AkimboFireSequence( wp, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] ) ) {
 				takeweapon = WP_COLT;
 			}
+		} else if ( wp == WP_DUAL_TT33 ) {
+			if ( !BG_AkimboFireSequence( wp, pm->ps->ammoclip[WP_DUAL_TT33], pm->ps->ammoclip[WP_TT33] ) ) {
+				takeweapon = WP_TT33;
+			}
 		}
 
 		pm->ps->ammoclip[takeweapon] -= amount;
@@ -2798,6 +2842,10 @@ int PM_WeaponAmmoAvailable( int wp ) {
 		if ( wp == WP_AKIMBO ) {
 			if ( !BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] ) ) {
 				takeweapon = WP_COLT;
+			}
+		} else if ( wp == WP_DUAL_TT33 ) {
+			if ( !BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_DUAL_TT33], pm->ps->ammoclip[WP_TT33] ) ) {
+				takeweapon = WP_TT33;
 			}
 		}
 
@@ -2911,6 +2959,7 @@ void PM_AdjustAimSpreadScale( void ) {
 		case WP_SNOOPERSCOPE:
 		case WP_FG42SCOPE:
 		case WP_DELISLESCOPE:
+		case WP_M1941SCOPE:
 		//case WP_M1GARAND: //haha no plz
 			for ( i = 0; i < 2; i++ )
 				viewchange += fabs( pm->ps->velocity[i] );
@@ -3161,7 +3210,8 @@ static void PM_Weapon( void ) {
 	int addTime  = GetWeaponTableData(pm->ps->weapon)->nextShotTime;
 	int aimSpreadScaleAdd = GetWeaponTableData(pm->ps->weapon)->aimSpreadScaleAdd;
 	int weapattackanim;
-	qboolean akimboFire;
+	qboolean akimboFire_colt;
+	qboolean akimboFire_tt33;
 	qboolean gameReloading;
 
 	// don't allow attack until all buttons are up
@@ -3197,7 +3247,8 @@ static void PM_Weapon( void ) {
 		return;
 	}
 
-	akimboFire = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] );
+	akimboFire_colt = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] );
+	akimboFire_tt33 = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_DUAL_TT33], pm->ps->ammoclip[WP_TT33] );
 
 	if ( 0 ) {
 		switch ( pm->ps->weaponstate ) {
@@ -3566,10 +3617,12 @@ static void PM_Weapon( void ) {
 	case WP_SILENCER:
 	case WP_LUGER:
 	case WP_TT33:
+	case WP_HDM:
 	case WP_P38:
 	case WP_REVOLVER:
 	case WP_COLT:
-	case WP_AKIMBO:         
+	case WP_AKIMBO:
+	case WP_DUAL_TT33:         
 	case WP_SNIPERRIFLE:
 	case WP_SNOOPERSCOPE:
 	case WP_MAUSER:
@@ -3581,6 +3634,7 @@ static void PM_Weapon( void ) {
 	case WP_GARAND:
     case WP_M7:
 	case WP_M1941:
+	case WP_M1941SCOPE:
 		if ( !weaponstateFiring ) {
 			// NERVE's panzerfaust spinup
 //			if (pm->ps->weapon == WP_PANZERFAUST)
@@ -3666,7 +3720,7 @@ static void PM_Weapon( void ) {
 			reloadingW = (qboolean)( ammoNeeded <= pm->ps->ammo[ BG_FindAmmoForWeapon( pm->ps->weapon )] );
 
 			// autoreload if not in auto-reload mode, and reload was not explicitely requested, just play the 'out of ammo' sound
-			if ( !pm->pmext->bAutoReload && IS_AUTORELOAD_WEAPON( pm->ps->weapon ) && !( pm->cmd.wbuttons & WBUTTON_RELOAD ) ) {
+			if ( !pm->pmext->bAutoReload && !isAutoReloadWeapon( pm->ps->weapon ) && !( pm->cmd.wbuttons & WBUTTON_RELOAD ) ) {
 				reloadingW = qfalse;
 			} 
 
@@ -3693,6 +3747,7 @@ static void PM_Weapon( void ) {
 			case WP_SNIPERRIFLE:
 			case WP_FG42SCOPE:
 			case WP_DELISLESCOPE:
+			case WP_M1941SCOPE:
 				reloadingW = qfalse;
 				break;
 			}
@@ -3745,7 +3800,13 @@ static void PM_Weapon( void ) {
 	// if this was the last round in the clip, play the 'lastshot' animation
 	// this animation has the weapon in a "ready to reload" state
 	if ( pm->ps->weapon == WP_AKIMBO ) {
-		if ( akimboFire ) {
+		if ( akimboFire_colt ) {
+			weapattackanim = WEAP_ATTACK1;      // attack1 is right hand
+		} else {
+			weapattackanim = WEAP_ATTACK2;      // attack2 is left hand
+		}
+	} else if ( pm->ps->weapon == WP_DUAL_TT33 ) {
+		if ( akimboFire_tt33 ) {
 			weapattackanim = WEAP_ATTACK1;      // attack1 is right hand
 		} else {
 			weapattackanim = WEAP_ATTACK2;      // attack2 is left hand
@@ -3810,7 +3871,13 @@ static void PM_Weapon( void ) {
 
 
 	if ( pm->ps->weapon == WP_AKIMBO ) {
-		if ( pm->ps->weapon == WP_AKIMBO && !akimboFire ) {
+		if ( pm->ps->weapon == WP_AKIMBO && !akimboFire_colt ) {
+			PM_AddEvent( EV_FIRE_WEAPONB );     // really firing colt
+		} else {
+			PM_AddEvent( EV_FIRE_WEAPON );
+		}
+	} else if ( pm->ps->weapon == WP_DUAL_TT33 ) {
+		if ( pm->ps->weapon == WP_DUAL_TT33 && !akimboFire_tt33 ) {
 			PM_AddEvent( EV_FIRE_WEAPONB );     // really firing colt
 		} else {
 			PM_AddEvent( EV_FIRE_WEAPON );
@@ -3867,7 +3934,15 @@ static void PM_Weapon( void ) {
 	    case WP_AKIMBO:
 		    addTime = ammoTable[pm->ps->weapon].nextShotTime;
 		       if ( !pm->ps->ammoclip[WP_AKIMBO] || !pm->ps->ammoclip[WP_COLT] ) {
-			       if ( ( !pm->ps->ammoclip[WP_AKIMBO] && !akimboFire ) || ( !pm->ps->ammoclip[WP_COLT] && akimboFire ) ) {
+			       if ( ( !pm->ps->ammoclip[WP_AKIMBO] && !akimboFire_colt ) || ( !pm->ps->ammoclip[WP_COLT] && akimboFire_colt ) ) {
+				        addTime = 2 * ammoTable[pm->ps->weapon].nextShotTime;
+			       }
+		       }
+		break;
+	    case WP_DUAL_TT33:
+		    addTime = ammoTable[pm->ps->weapon].nextShotTime;
+		       if ( !pm->ps->ammoclip[WP_DUAL_TT33] || !pm->ps->ammoclip[WP_TT33] ) {
+			       if ( ( !pm->ps->ammoclip[WP_DUAL_TT33] && !akimboFire_tt33 ) || ( !pm->ps->ammoclip[WP_TT33] && akimboFire_tt33 ) ) {
 				        addTime = 2 * ammoTable[pm->ps->weapon].nextShotTime;
 			       }
 		       }
@@ -4602,7 +4677,7 @@ void PmoveSingle( pmove_t *pmove ) {
 
 	if ( pm->cmd.wbuttons & WBUTTON_ZOOM ) {
 		if ( pm->ps->stats[STAT_KEYS] & ( 1 << INV_BINOCS ) ) {        // (SA) binoculars are an inventory item (inventory==keys)
-			if ( pm->ps->weapon != WP_SNIPERRIFLE && pm->ps->weapon != WP_SNOOPERSCOPE && pm->ps->weapon != WP_FG42SCOPE && pm->ps->weapon != WP_DELISLESCOPE ) {   // don't allow binocs if using scope
+			if ( pm->ps->weapon != WP_SNIPERRIFLE && pm->ps->weapon != WP_SNOOPERSCOPE && pm->ps->weapon != WP_FG42SCOPE && pm->ps->weapon != WP_DELISLESCOPE && pm->ps->weapon != WP_M1941SCOPE ) {   // don't allow binocs if using scope
 				if ( !( pm->ps->eFlags & EF_MG42_ACTIVE ) ) {    // or if mounted on a weapon
 					pm->ps->eFlags |= EF_ZOOMING;
 				}

@@ -1431,6 +1431,13 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		}
 	}
 
+	if ( weapon == WP_TT33 ) {
+		// if you had the colt already, now you've got two!
+		if ( COM_BitCheck( g_entities[cs->entityNum].client->ps.weapons, WP_TT33 ) ) {
+			weapon = WP_DUAL_TT33;
+		}
+	}
+
 	if ( weapon != WP_NONE ) {
 		COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, weapon );
 
@@ -1449,6 +1456,9 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		}
 		if ( weapon == WP_DELISLESCOPE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_DELISLE );
+		}
+		if ( weapon == WP_M1941SCOPE ) {
+			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_M1941 );
 		}
 //----(SA)	end
 
@@ -1488,6 +1498,8 @@ qboolean AICast_ScriptAction_GiveWeaponFull( cast_state_t *cs, char *params ) {
 	int weapon;
 	int i;
 	gentity_t   *ent = &g_entities[cs->entityNum];
+
+	int maxAmmo = sizeof(ammoTable) / sizeof(ammoTable[0]);
 	
 	weapon = WP_NONE;
 
@@ -1510,40 +1522,195 @@ qboolean AICast_ScriptAction_GiveWeaponFull( cast_state_t *cs, char *params ) {
 		}
 	}
 
+    // Weapon randomizer
+
 	if ( !Q_strcasecmp (params, "weapon_random") ) 
 	{
-	weapon = ammoTable[3 + rand() % 29].weaponindex;
+		int wpnIndices[MAX_WEAPONS];
+	    int numWpns = 0;
+        
+		   // Find all weapons
+           for (int i = 0; i < maxAmmo; i++) {
+                if (ammoTable[i].weaponClass != WEAPON_CLASS_UNUSED || ammoTable[i].weaponClass != WEAPON_CLASS_MELEE || ammoTable[i].weaponClass != WEAPON_CLASS_AKIMBO || ammoTable[i].weaponClass != WEAPON_CLASS_GRENADE )
+				{
+                   wpnIndices[numWpns] = i;
+                   numWpns++;
+                }
+            }
+
+	      // Select a random weapon
+          if (numWpns > 0) 
+		  {
+            int randomIndex = rand() % numWpns;
+            weapon = ammoTable[wpnIndices[randomIndex]].weaponindex;
+          }
 	}
 
 	if ( !Q_strcasecmp (params, "pistol_random") ) 
 	{
-	weapon = ammoTable[3 + rand() % 7].weaponindex;
+		int pistolIndices[MAX_WEAPONS];
+	    int numPistols = 0;
+        
+		   // Find all pistols
+           for (int i = 0; i < maxAmmo; i++) {
+                if (ammoTable[i].weaponClass == WEAPON_CLASS_PISTOL)
+				{
+                   pistolIndices[numPistols] = i;
+                   numPistols++;
+                }
+            }
+
+	      // Select a random pistol
+          if (numPistols > 0) 
+		  {
+            int randomIndex = rand() % numPistols;
+            weapon = ammoTable[pistolIndices[randomIndex]].weaponindex;
+          }
+
 	}
 
 	if ( !Q_strcasecmp (params, "smg_random") ) 
 	{
-	weapon = ammoTable[8 + rand() % 12].weaponindex;
+		int smgIndices[MAX_WEAPONS];
+	    int numSmgs = 0;
+        
+		   // Find all SMGs
+           for (int i = 0; i < maxAmmo; i++) {
+                if (ammoTable[i].weaponClass == WEAPON_CLASS_SMG)
+				{
+                   smgIndices[numSmgs] = i;
+                   numSmgs++;
+                }
+            }
+
+	      // Select a random SMG
+          if (numSmgs > 0) 
+		  {
+            int randomIndex = rand() % numSmgs;
+            weapon = ammoTable[smgIndices[randomIndex]].weaponindex;
+          }
 	}
 
 	if ( !Q_strcasecmp (params, "rifle_random") ) 
 	{
-	weapon = ammoTable[13 + rand() % 19].weaponindex;
-	}
+		int rifleIndices[MAX_WEAPONS];
+	    int numRifles = 0;
+        
+		   // Find all Rifles
+           for (int i = 0; i < maxAmmo; i++) {
+                if (ammoTable[i].weaponClass == WEAPON_CLASS_RIFLE || ammoTable[i].weaponClass == WEAPON_CLASS_ASSAULT_RIFLE)
+				{
+                   rifleIndices[numRifles] = i;
+                   numRifles++;
+                }
+            }
 
-	if ( !Q_strcasecmp (params, "ar_random") ) 
-	{
-	weapon = ammoTable[20 + rand() % 22].weaponindex;
+	      // Select a random Rifle
+          if (numRifles > 0) 
+		  {
+            int randomIndex = rand() % numRifles;
+            weapon = ammoTable[rifleIndices[randomIndex]].weaponindex;
+          }
 	}
 
 	if ( !Q_strcasecmp (params, "heavy_random") ) 
 	{
-	weapon = ammoTable[23 + rand() % 29].weaponindex;
+		int heavyIndices[MAX_WEAPONS];
+	    int numHeavies = 0;
+        
+		   // Find all Heavy weapons
+           for (int i = 0; i < maxAmmo; i++) {
+                if (ammoTable[i].weaponClass == WEAPON_CLASS_MG || ammoTable[i].weaponClass == WEAPON_CLASS_LAUNCHER || ammoTable[i].weaponClass == WEAPON_CLASS_BEAM || ammoTable[i].weaponClass == WEAPON_CLASS_SHOTGUN  )
+				{
+                   heavyIndices[numHeavies] = i;
+                   numHeavies++;
+                }
+            }
+
+	      // Select a random Heavy weapon
+          if (numHeavies > 0) 
+		  {
+            int randomIndex = rand() % numHeavies;
+            weapon = ammoTable[heavyIndices[randomIndex]].weaponindex;
+          }
 	}
 
+	if ( !Q_strcasecmp (params, "axis_random") ) 
+	{
+		int axisIndices[MAX_WEAPONS];
+	    int numAxis = 0;
+        
+		   // Find all Axis Weapons
+           for (int i = 0; i < maxAmmo; i++) {
+                if ( (ammoTable[i].weaponTeam == WEAPON_TEAM_AXIS || ammoTable[i].weaponTeam == WEAPON_TEAM_COMMON) && ammoTable[i].weaponClass != WEAPON_CLASS_UNUSED && ammoTable[i].weaponClass != WEAPON_CLASS_GRENADE )
+				{
+                   axisIndices[numAxis] = i;
+                   numAxis++;
+                }
+            }
+
+	      // Select a random Axis weapon
+          if (numAxis > 0) 
+		  {
+            int randomIndex = rand() % numAxis;
+            weapon = ammoTable[axisIndices[randomIndex]].weaponindex;
+          }
+	}
+
+	if ( !Q_strcasecmp (params, "allies_random") ) 
+	{
+		int alliesIndices[MAX_WEAPONS];
+	    int numAllies = 0;
+        
+		   // Find all Allied Weapons
+           for (int i = 0; i < maxAmmo; i++) {
+                if ( (ammoTable[i].weaponTeam == WEAPON_TEAM_ALLIES || ammoTable[i].weaponTeam == WEAPON_TEAM_COMMON) && ammoTable[i].weaponClass != WEAPON_CLASS_UNUSED && ammoTable[i].weaponClass != WEAPON_CLASS_GRENADE )
+				{
+                   alliesIndices[numAllies] = i;
+                   numAllies++;
+                }
+            }
+
+	      // Select a random Allied weapon
+          if (numAllies > 0) 
+		  {
+            int randomIndex = rand() % numAllies;
+            weapon = ammoTable[alliesIndices[randomIndex]].weaponindex;
+          }
+	}
+
+if ( !Q_strcasecmp (params, "soviet_random") ) 
+	{
+		int sovietIndices[MAX_WEAPONS];
+	    int numSoviet = 0;
+        
+		   // Find all Soviet Weapons
+           for (int i = 0; i < maxAmmo; i++) {
+                if ( (ammoTable[i].weaponTeam == WEAPON_TEAM_SOVIET || ammoTable[i].weaponTeam == WEAPON_TEAM_COMMON) && ammoTable[i].weaponClass != WEAPON_CLASS_UNUSED && ammoTable[i].weaponClass != WEAPON_CLASS_GRENADE )
+				{
+                   sovietIndices[numSoviet] = i;
+                   numSoviet++;
+                }
+            }
+
+	      // Select a random Soviet weapon
+          if (numSoviet > 0) 
+		  {
+            int randomIndex = rand() % numSoviet;
+            weapon = ammoTable[sovietIndices[randomIndex]].weaponindex;
+          }
+	}
+
+	// if you had the colt already, now you've got two!
 	if ( weapon == WP_COLT ) {
-		// if you had the colt already, now you've got two!
 		if ( COM_BitCheck( g_entities[cs->entityNum].client->ps.weapons, WP_COLT ) ) {
 			weapon = WP_AKIMBO;
+		}
+	}
+
+	if ( weapon == WP_TT33 ) {
+		if ( COM_BitCheck( g_entities[cs->entityNum].client->ps.weapons, WP_TT33 ) ) {
+			weapon = WP_DUAL_TT33;
 		}
 	}
 
@@ -1565,6 +1732,9 @@ qboolean AICast_ScriptAction_GiveWeaponFull( cast_state_t *cs, char *params ) {
 		}
 		if ( weapon == WP_DELISLESCOPE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_DELISLE );
+		}
+		if ( weapon == WP_M1941SCOPE ) {
+			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_M1941 );
 		}
 //----(SA)	end
 
@@ -1645,6 +1815,16 @@ qboolean AICast_ScriptAction_TakeWeapon( cast_state_t *cs, char *params ) {
 				// take 'akimbo' first if it's there, then take 'colt'
 				if ( COM_BitCheck( g_entities[cs->entityNum].client->ps.weapons, WP_AKIMBO ) ) {
 					weapon = WP_AKIMBO;
+				}
+			}
+
+			if ( weapon == WP_DUAL_TT33 ) {
+				// take both the colt /and/ the akimbo weapons when 'akimbo' is specified
+				COM_BitClear( g_entities[cs->entityNum].client->ps.weapons, WP_TT33 );
+			} else if ( weapon == WP_TT33 ) {
+				// take 'akimbo' first if it's there, then take 'colt'
+				if ( COM_BitCheck( g_entities[cs->entityNum].client->ps.weapons, WP_DUAL_TT33 ) ) {
+					weapon = WP_DUAL_TT33;
 				}
 			}
 
@@ -1928,6 +2108,10 @@ qboolean AICast_ScriptAction_SaveCheckpoint ( cast_state_t *cs, char *params ) {
 	char *pString, *saveName;
 	pString = params;
 
+	gentity_t   *player;
+
+	player = AICast_FindEntityForName( "player" );
+
 	if ( cs->bs ) {
 		G_Error( "AI Scripting: savegame attempted on a non-player" );
 	}
@@ -1935,14 +2119,15 @@ qboolean AICast_ScriptAction_SaveCheckpoint ( cast_state_t *cs, char *params ) {
 //----(SA)	check for parameter
 	saveName = COM_ParseExt( &pString, qfalse );
 	if ( !saveName[0] ) {
-		G_SaveGame( "lastcheckpoint" );	// save the default "current" savegame
+		G_SaveGame( "lastcheckpoint" );	// save the default "current" savegame  
 		G_SaveGame( "current" );	   // save the default "current" savegame
 	} else {
 		G_SaveGame( saveName );
 	}
 
-	trap_SendServerCommand( -1, "cptop checkpointsaved" );  // yes save for u
-//----(SA)	end
+	//trap_SendServerCommand( -1, "cptop checkpointsaved" );  // yes save for u
+	
+	G_AddEvent( player, EV_CHECKPOINT_PASSED, G_SoundIndex( "sound/misc/blank.wav" ) );
 
 	return qtrue;
 }
@@ -2843,7 +3028,7 @@ qboolean AICast_ScriptAction_ObjectiveMet( cast_state_t *cs, char *params ) {
 			G_Error( "AI Scripting: missionsuccess with unknown parameter: %s\n", token );
 		}
 	} else {    // show on-screen information
-		trap_Cvar_Set( "cg_youGotMail", "2" ); // set flag to draw icon
+		G_AddEvent( player, EV_OBJECTIVE_MET, G_SoundIndex( "sound/misc/objective_met.wav" ) );
 	}
 
 	return qtrue;

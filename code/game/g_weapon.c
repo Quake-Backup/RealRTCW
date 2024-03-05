@@ -540,8 +540,8 @@ float G_GetWeaponSpread( int weapon ) {
 #define P38_SPREAD		G_GetWeaponSpread( WP_P38 )
 #define P38_DAMAGE(e)		G_GetWeaponDamage( WP_P38, e )
 
-#define WELROD_SPREAD		G_GetWeaponSpread( WP_WELROD )
-#define WELROD_DAMAGE(e)	G_GetWeaponDamage( WP_WELROD, e )
+#define HDM_SPREAD		G_GetWeaponSpread( WP_HDM )
+#define HDM_DAMAGE(e)	G_GetWeaponDamage( WP_HDM, e )
 
 #define REVOLVER_SPREAD		G_GetWeaponSpread( WP_REVOLVER )
 #define REVOLVER_DAMAGE(e)		G_GetWeaponDamage( WP_REVOLVER, e )
@@ -557,6 +557,9 @@ float G_GetWeaponSpread( int weapon ) {
 
 #define M1941_SPREAD     G_GetWeaponSpread( WP_M1941 )
 #define M1941_DAMAGE(e)     G_GetWeaponDamage( WP_M1941, e ) 
+
+#define M1941SCOPE_SPREAD   G_GetWeaponSpread( WP_M1941SCOPE )
+#define M1941SCOPE_DAMAGE(e)   G_GetWeaponDamage( WP_M1941SCOPE, e ) 
 
 #define M1GARAND_SPREAD     G_GetWeaponSpread( WP_M1GARAND )
 #define M1GARAND_DAMAGE(e)     G_GetWeaponDamage( WP_M1GARAND, e ) 
@@ -1571,6 +1574,7 @@ void CalcMuzzlePoint( gentity_t *ent, int weapon, vec3_t forward, vec3_t right, 
 		VectorMA( muzzlePoint, 20, right, muzzlePoint );
 		break;
 	case WP_AKIMBO:     // left side rather than right
+	case WP_DUAL_TT33:
 		VectorMA( muzzlePoint, -6, right, muzzlePoint );
 		VectorMA( muzzlePoint, -4, up, muzzlePoint );
 		break;
@@ -1617,7 +1621,7 @@ void CalcMuzzlePoints( gentity_t *ent, int weapon ) {
 	if ( !( ent->r.svFlags & SVF_CASTAI ) ) {   // non ai's take into account scoped weapon 'sway' (just another way aimspread is visualized/utilized)
 		float spreadfrac, phase;
 
-		if ( weapon == WP_SNIPERRIFLE || weapon == WP_SNOOPERSCOPE || weapon == WP_FG42SCOPE || weapon == WP_DELISLESCOPE ) {
+		if ( weapon == WP_SNIPERRIFLE || weapon == WP_SNOOPERSCOPE || weapon == WP_FG42SCOPE || weapon == WP_DELISLESCOPE || weapon == WP_M1941SCOPE ) {
 			spreadfrac = ent->client->currentAimSpreadScale;
 
 			// rotate 'forward' vector by the sway
@@ -1682,6 +1686,7 @@ void FireWeapon( gentity_t *ent ) {
 			case WP_SILENCER:
 			case WP_COLT:
 			case WP_AKIMBO:
+			case WP_DUAL_TT33:
 				aimSpreadScale += 0.4f;
 				break;
 
@@ -1798,13 +1803,14 @@ void FireWeapon( gentity_t *ent ) {
 		Bullet_Fire( ent, MP34_SPREAD * aimSpreadScale, MP34_DAMAGE(isPlayer)  );
 		break;
 	case WP_TT33:
+	case WP_DUAL_TT33:
 		Bullet_Fire( ent, TT33_SPREAD * aimSpreadScale, TT33_DAMAGE(isPlayer)  );
 		break;
 	case WP_P38:
 		Bullet_Fire( ent, P38_SPREAD * aimSpreadScale, P38_DAMAGE(isPlayer)  );
 		break;
-	case WP_WELROD:
-		Bullet_Fire( ent, WELROD_SPREAD * aimSpreadScale, WELROD_DAMAGE(isPlayer) );
+	case WP_HDM:
+		Bullet_Fire( ent, HDM_SPREAD * aimSpreadScale, HDM_DAMAGE(isPlayer) );
 		break;
 	case WP_REVOLVER:
 		Bullet_Fire( ent, REVOLVER_SPREAD * aimSpreadScale, REVOLVER_DAMAGE(isPlayer) );
@@ -1820,6 +1826,16 @@ void FireWeapon( gentity_t *ent ) {
 		break;
 	case WP_M1941: 
 		Bullet_Fire( ent, M1941_SPREAD * aimSpreadScale, M1941_DAMAGE(isPlayer)  );
+		break;
+	case WP_M1941SCOPE:
+		Bullet_Fire( ent, M1941SCOPE_SPREAD * aimSpreadScale, M1941SCOPE_DAMAGE (isPlayer) );
+		if ( !ent->aiCharacter ) {
+			VectorCopy( ent->client->ps.viewangles,viewang );
+			ent->client->sniperRifleMuzzleYaw = crandom() * 0.5; // used in clientthink
+			ent->client->sniperRifleMuzzlePitch = 0.8f;
+			ent->client->sniperRifleFiredTime = level.time;
+			SetClientViewAngle( ent,viewang );
+		}
 		break;
 	case WP_M1GARAND: 
 		Bullet_Fire( ent, M1GARAND_SPREAD * aimSpreadScale, M1GARAND_DAMAGE(isPlayer)  );
@@ -1997,8 +2013,15 @@ void G_LoadAmmoTable( weapon_t weaponNum )
 	filename = BG_GetWeaponFilename( weaponNum );
 	if ( !*filename )
 		return;
+    
+    if ( g_vanilla_plus.integer ) 
+	{
+	    handle = trap_PC_LoadSource( va( "weapons/vanilla/%s", filename ) );
+	} else {
+		handle = trap_PC_LoadSource( va( "weapons/%s", filename ) );
+	}
 
-	handle = trap_PC_LoadSource( va( "weapons/%s", filename ) );
+
 	if ( !handle ) {
 		G_Printf( S_COLOR_RED "ERROR: Failed to load weap file %s\n", filename );
 		return;

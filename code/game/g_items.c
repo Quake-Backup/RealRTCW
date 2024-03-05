@@ -394,7 +394,6 @@ void Add_Ammo( gentity_t *ent, int weapon, int count, qboolean fillClip ) {
 		COM_BitSet( ent->client->ps.weapons, ammoweap );
 	case WP_TESLA:
 	case WP_FLAMETHROWER:
-	case WP_WELROD:
 	case WP_HOLYCROSS:
 		noPack = qtrue;
 		break;
@@ -548,6 +547,12 @@ int Pickup_Weapon( gentity_t *ent, gentity_t *other ) {
 		}
 	}
 
+		if ( weapon == WP_TT33 ) {
+		if ( COM_BitCheck( other->client->ps.weapons, WP_TT33 ) ) {
+			weapon = WP_DUAL_TT33;
+		}
+	}
+
 
 		if ( ent->item->giTag == WP_KNIFE ){
 		if ( other->client->ps.ammoclip[ent->item->giTag] < ammoTable[WP_KNIFE].maxammo  ){
@@ -584,9 +589,10 @@ int Pickup_Weapon( gentity_t *ent, gentity_t *other ) {
 		COM_BitSet( other->client->ps.weapons, WP_M1GARAND );
 	} else if ( weapon == WP_DELISLESCOPE ) {
 		COM_BitSet( other->client->ps.weapons, WP_DELISLE );
+	} else if ( weapon == WP_M1941SCOPE ) {
+		COM_BitSet( other->client->ps.weapons, WP_M1941 );
 	}
-
-
+	
 	Add_Ammo( other, weapon, quantity, !alreadyHave );
 
 
@@ -1066,6 +1072,11 @@ void FinishSpawningItem( gentity_t *ent ) {
 	}
 
 	if ( g_nopickupchallenge.integer && ent->item->giType == IT_HEALTH )
+	{
+    return;
+	}
+
+	if ( g_regen.integer && ent->item->giType == IT_HEALTH )
 	{
     return;
 	}

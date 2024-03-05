@@ -219,6 +219,12 @@ static void CG_ItemPickup( int itemNum ) {
 			}
 		}
 
+		if ( weapon == WP_TT33 ) {
+			if ( COM_BitCheck( cg.snap->ps.weapons, weapon ) ) {
+				weapon = WP_DUAL_TT33; // you have TT33, now get DUAL TT33(second)
+			}
+		}
+
 		if ( cg_autoswitch.integer && cg.predictedPlayerState.weaponstate != WEAPON_RELOADING ) {
 
 			//	0 - "Off"
@@ -229,7 +235,7 @@ static void CG_ItemPickup( int itemNum ) {
 			//	5 - "New and Better"
 
 			// don't ever autoswitch to secondary fire weapons
-			if ( weapon != WP_SNIPERRIFLE && weapon != WP_SNOOPERSCOPE && weapon != WP_FG42SCOPE && weapon != WP_DELISLESCOPE ) {  //----(SA)	modified
+			if ( weapon != WP_SNIPERRIFLE && weapon != WP_SNOOPERSCOPE && weapon != WP_FG42SCOPE && weapon != WP_DELISLESCOPE && weapon != WP_M1941SCOPE ) {  //----(SA)	modified
 
 				// no weap currently selected, always just select the new one
 				if ( !cg.weaponSelect ) {
@@ -1751,6 +1757,12 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			trap_S_StartSound( NULL, es->number, CHAN_WEAPON, cg_weapons[es->weapon].reloadFullSound ); // JPW NERVE following sherman's SP fix, should allow killing reload sound when player dies
 		}
 		break;
+	case EV_FILL_CLIP_AI:
+		DEBUGNAME( "EV_FILL_CLIP_AI" );
+		if ( cg_weapons[es->weapon].reloadSound ) {
+			trap_S_StartSound( NULL, es->number, CHAN_WEAPON, cg_weapons[es->weapon].reloadSoundAi );
+		}
+		break;
 
 	case EV_M97_PUMP:
 		DEBUGNAME("EV_M97_PUMP");
@@ -1795,6 +1807,9 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 			break;
 		case WP_DELISLESCOPE:
 			newweap = WP_DELISLE;
+			break;
+		case WP_M1941SCOPE:
+			newweap = WP_M1941;
 			break;
 		case WP_FG42SCOPE:
 			newweap = WP_FG42;
@@ -2068,7 +2083,16 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 	case EV_CLOSEMENU:
 		Menus_CloseAll();
 		break;
-
+	case EV_OBJECTIVE_MET:
+		trap_Cvar_Set( "cg_youGotMail", "2" ); 
+		cg.yougotmailTime = cg.time;
+	break;
+	case EV_CHECKPOINT_PASSED:
+		cg.checkpointTime = cg.time;
+	break;
+	case EV_GAME_SAVED:
+		cg.gameSavedTime = cg.time;
+	break;
 	case EV_GIVEPAGE:
 	{
 		int havepages = cg_notebookpages.integer;
@@ -2082,13 +2106,17 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		DEBUGNAME( "EV_GENERAL_SOUND" );
 		// Ridah, check for a sound script
 		s = CG_ConfigString( CS_SOUNDS + es->eventParm );
+		//trap_SendServerCommand( -1, va( "cpst %s", s ) );
+//		CG_SubtitlePrint( s, SCREEN_HEIGHT - ( SCREEN_HEIGHT * 0.33 ), 6 );
 		if ( !strstr( s, ".wav" ) ) {
 			if ( CG_SoundPlaySoundScript( s, NULL, es->number ) ) {
 				break;
 			}
-
-			break;  
-
+			// try with .wav
+			break;  // RF, all sounds should have extension
+			//Q_strncpyz( tempStr, s, sizeof( tempStr ) );
+			//Q_strcat( tempStr, sizeof( tempStr ), ".wav" );
+			//s = tempStr;
 		}
 		// done.
 		if ( cgs.gameSounds[ es->eventParm ] ) {
@@ -2540,17 +2568,6 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 	case EV_SPAWN_SPIRIT:
 		CG_SpawnSpirit( cent );
-		break;
-
-	case EV_ALERT_SPEAKER:
-		DEBUGNAME( "EV_ALERT_SPEAKER" );
-		switch ( cent->currentState.otherEntityNum2 )
-		{
-		case 1:     CG_UnsetActiveOnScriptSpeaker( cent->currentState.otherEntityNum ); break;
-		case 2:     CG_SetActiveOnScriptSpeaker( cent->currentState.otherEntityNum );   break;
-		case 0:
-		default:    CG_ToggleActiveOnScriptSpeaker( cent->currentState.otherEntityNum );    break;
-		}
 		break;
 
 	default:

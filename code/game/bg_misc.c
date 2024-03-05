@@ -295,7 +295,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 	{   
 		WP_TT33,
 		WEAPON_CLASS_PISTOL,
-		WP_NONE,
+		WP_DUAL_TT33,
 		WEAPON_TEAM_SOVIET,             
 		0,     
 		0,       
@@ -762,7 +762,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 	// Semi auto rifles
 	{   
 		WP_M1GARAND,
-		WEAPON_CLASS_AUTO_RIFLE,
+		WEAPON_CLASS_RIFLE,
 		WP_M7,
 		WEAPON_TEAM_ALLIES,         
 		0,    
@@ -801,7 +801,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 
 	{   
 		WP_G43,
-		WEAPON_CLASS_AUTO_RIFLE,
+		WEAPON_CLASS_RIFLE,
 		WP_NONE,
 		WEAPON_TEAM_AXIS,              
 		0,     
@@ -840,8 +840,8 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 
 	{   
 		WP_M1941,
-		WEAPON_CLASS_AUTO_RIFLE,
-		WP_NONE,
+		WEAPON_CLASS_RIFLE | WEAPON_CLASS_SCOPABLE,
+		WP_M1941SCOPE,
 		WEAPON_TEAM_ALLIES,              
 		0,     
 		0,       
@@ -1542,7 +1542,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 
 	{   
 		WP_AKIMBO,
-		WEAPON_CLASS_PISTOL,
+		WEAPON_CLASS_AKIMBO,
 		WP_COLT,
 		WEAPON_TEAM_ALLIES,           
 		0,         
@@ -1571,6 +1571,45 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 		0,  
 		{0.0, 0.0},             
 		MOD_AKIMBO,    
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,                                
+    }, 
+
+	{   
+		WP_DUAL_TT33,
+		WEAPON_CLASS_AKIMBO,
+		WP_TT33,
+		WEAPON_TEAM_SOVIET,           
+		0,         
+		0,       
+		0,        
+		0,        
+		0, 
+		0,      
+		0,       
+		0,       
+		0,      
+		0,      
+		0,       
+		0,          
+		0,          
+		0,          
+		0,        
+		0,                 
+		0.0f,            
+		0,              
+		{.0f, .0f},      
+		{0,0},              
+		0,                
+		0.0,               
+		0,               
+		0,  
+		{0.0, 0.0},             
+		MOD_DUAL_TT33,    
 		0,
 		0,
 		0,
@@ -1618,10 +1657,49 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 		0,                                  
 	},
 
+	{   
+		WP_M1941SCOPE,
+		WEAPON_CLASS_RIFLE | WEAPON_CLASS_SCOPED, 
+		WP_M1941,  
+		WEAPON_TEAM_ALLIES,  
+		0,         
+		0,       
+		0,
+		0,        
+		0,        
+		0,         
+		0,      
+		0,      
+		0,      
+		0,      
+		0,       
+		0,        
+		0,          
+		0,          
+		0,        
+		0,                  
+		0.0f,            
+		0,               
+		{0,0},           
+		{0,0},              
+		0,                
+		0.00,               
+		0,               
+		0, 
+		{0.0, 0.0},              
+		MOD_M1941SCOPE,   
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,                            
+	}, 
+
     // Currently unused Gothicstein weapons
 	{   
 		WP_P38,
-		WEAPON_CLASS_PISTOL,
+		WEAPON_CLASS_UNUSED,
 		WP_NONE, 
 		WEAPON_TEAM_AXIS,             
 		0,        
@@ -1660,7 +1738,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 
 	{   
 		WP_M30,
-		WEAPON_CLASS_SHOTGUN,
+		WEAPON_CLASS_UNUSED,
 		WP_NONE,
 		WEAPON_TEAM_COMMON,              
 		0,        
@@ -1776,7 +1854,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 	}, 
 
 	{   
-		WP_WELROD,
+		WP_HDM,
 		WEAPON_CLASS_PISTOL,
 		WP_NONE,
 		WEAPON_TEAM_ALLIES,           
@@ -1805,7 +1883,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 		0,               
 		0,
 		{0.0, 0.0},               
-		MOD_WELROD, 
+		MOD_HDM, 
 		0,
 		0,
 		0,
@@ -1818,7 +1896,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 		WP_HOLYCROSS,
 		WEAPON_CLASS_BEAM,
 		WP_NONE,
-		WEAPON_TEAM_COMMON,        
+		WEAPON_TEAM_NONE,        
 		0,                  
 		0,       
 		0,       
@@ -1856,7 +1934,7 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
     // Misc stuff, not actual weapons
 		{   
 		WP_DUMMY_MG42,
-		WEAPON_CLASS_MG,
+		WEAPON_CLASS_UNUSED,
 		WP_NONE,
 		WEAPON_TEAM_COMMON,             
 		0,     
@@ -2022,7 +2100,7 @@ int reloadableWeapons[] = {
 	WP_MAUSER,      WP_SNIPERRIFLE, WP_SNOOPERSCOPE,    WP_MOSIN,               WP_M1GARAND,            WP_G43,
 	WP_MP44,        WP_BAR,         WP_M97,             WP_FG42SCOPE,           WP_BROWNING,            WP_VENOM,
 	WP_P38,         WP_M30,         WP_DELISLE,         WP_DELISLESCOPE,        WP_TESLA,               WP_M1941,
-	WP_AUTO5,       -1
+	WP_AUTO5,       WP_M1941SCOPE,  WP_DUAL_TT33, -1
 };
 
 // new (10/18/00)
@@ -2952,6 +3030,32 @@ model="models/weapons2/mauser/mauser.md3"
 		{0,0,0,0,0}
 	},
 
+	/*QUAKED weapon_m1941scope (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/weapons2/mauser/mauser.md3"
+*/
+	{
+		"weapon_m1941scope",
+		"sound/misc/w_pkup.wav",
+		{   
+		"",
+		"",
+		""
+		},
+
+		"icons/iconw_m1941scope_1", 
+		"m1941scope",          
+		50,
+		IT_WEAPON,
+		WP_M1941SCOPE,
+		WP_M1941SCOPE,
+		WP_BAR,
+		WP_M1941,
+		"",                      
+		"",                      
+		{0,0,0,0,0}
+	},
+
 /*QUAKED weapon_sten (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
 -------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
 model="models/weapons2/sten/sten.md3"
@@ -2997,6 +3101,32 @@ dual colts
 		WP_AKIMBO,
 		WP_COLT,
 		WP_AKIMBO,
+		"",                     
+		"",                     
+		{0,0,0,0,0}
+	},
+
+
+/*weapon_akimbo
+dual TT33
+*/
+	{
+		"weapon_dualtt33",
+		"sound/misc/w_pkup.wav",
+		{   
+		"",
+		"",
+		""
+		},
+
+		"icons/iconw_tt33",    
+		"Dual TT33",            
+		50,
+		IT_WEAPON,
+		WP_DUAL_TT33,
+		WP_DUAL_TT33,
+		WP_TT33,
+		WP_DUAL_TT33,
 		"",                     
 		"",                     
 		{0,0,0,0,0}
@@ -3705,7 +3835,7 @@ model="models/multiplayer/m1941/m1941_3rd.md3"
 		IT_WEAPON,
 		WP_M1941,
 		WP_M1941,
-		WP_M1GARAND,
+		WP_BAR,
 		WP_M1941,
 		"",                  
 		"",                  
@@ -3871,7 +4001,7 @@ model="models/multiplayer/mg42/mg42_3rd.md3"
 		IT_WEAPON,
 		WP_BROWNING,
 		WP_BROWNING,
-		WP_BAR,
+		WP_VENOM,
 		WP_BROWNING,
 		"",                      
 		"",                      
@@ -3958,7 +4088,7 @@ model="models/weapons2/m30/m30_3rd.md3"
 			{ 0,0,0,0,0 }
 	},
 
-/*QUAKED weapon_welrod (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
+/*QUAKED weapon_hdm (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
 "stand" values:
 	no value:	laying in a default position on it's side (default)
 	2:			upright, barrel pointing up, slightly angled (rack mount)
@@ -3966,7 +4096,7 @@ model="models/weapons2/m30/m30_3rd.md3"
 model="models/weapons2/p38/luger.md3"
 */
 	{
-		"weapon_welrod",
+		"weapon_hdm",
 		"sound/misc/w_pkup.wav",
 		{   
 		"",
@@ -3974,14 +4104,14 @@ model="models/weapons2/p38/luger.md3"
 		"",
 		},
 
-		"icons/iconw_welrod",    
-		"welrod",              
+		"icons/iconw_hdm",    
+		"hdm",              
 		30,
 		IT_WEAPON,
-		WP_WELROD,
-		WP_WELROD,
-		WP_GARAND,
-		WP_WELROD,
+		WP_HDM,
+		WP_HDM,
+		WP_HDM,
+		WP_HDM,
 		"",                  
 		"",                 
 		{0,0,0,0}
@@ -5566,7 +5696,7 @@ BG_AkimboFireSequence
 qboolean BG_AkimboFireSequence( int weapon, int akimboClip, int coltClip ) {
 	// NOTE: this doesn't work when clips are turned off (dmflags 64)
 
-	if ( weapon != WP_AKIMBO ) {
+	if ( weapon != WP_AKIMBO && weapon != WP_DUAL_TT33 ) {
 		return qfalse;
 	}
 
@@ -5876,7 +6006,7 @@ qboolean BG_AddMagicAmmo( playerState_t *ps, int numOfClips ) {
 					}
 					ammoAdded = qtrue;
 
-					if ( weapon == WP_AKIMBO ) {
+					if ( weapon == WP_AKIMBO || weapon == WP_DUAL_TT33  ) {
 						weapNumOfClips = numOfClips * 2; // double clips babeh!
 					} else {
 						weapNumOfClips = numOfClips;
@@ -6781,6 +6911,7 @@ char *eventnames[] = {
 	"EV_EMPTYCLIP",
 	"EV_FILL_CLIP",
 	"EV_FILL_CLIP_FULL",
+	"EV_FILL_CLIP_AI",
 	"EV_WEAP_OVERHEAT",
 	"EV_CHANGE_WEAPON",
 	"EV_FIRE_WEAPON",
@@ -6884,13 +7015,15 @@ char *eventnames[] = {
 	"EV_SNIPER_SOUND",
 	"EV_POPUP",
 	"EV_POPUPBOOK",
+	"EV_OBJECTIVE_MET",
+	"EV_CHECKPOINT_PASSED",
+	"EV_GAME_SAVED",
 	"EV_GIVEPAGE",
 	"EV_CLOSEMENU",
 	"EV_M97_PUMP", //jaymod
 	"EV_THROWKNIFE",
 	"EV_COUGH",
 	"EV_QUICKGRENS",
-	"EV_ALERT_SPEAKER",
 	"EV_MAX_EVENTS"
 };
 
@@ -7611,6 +7744,7 @@ char *BG_GetWeaponFilename( weapon_t weaponNum )
 		case WP_COLT:              return "colt.weap";
 		case WP_AKIMBO:            return "akimbo.weap";
 		case WP_TT33:              return "tt33.weap";
+		case WP_DUAL_TT33:         return "dualtt33.weap";
 		case WP_P38:               return "p38.weap";
 		case WP_REVOLVER:          return "revolver.weap";
 		case WP_THOMPSON:          return "thompson.weap";
@@ -7644,12 +7778,13 @@ char *BG_GetWeaponFilename( weapon_t weaponNum )
 		case WP_AIRSTRIKE:         return "airstrike.weap";
 		case WP_POISONGAS:         return "poisongas.weap";
 		case WP_M30:               return "m30.weap";
-		case WP_WELROD:            return "welrod.weap";
+		case WP_HDM:               return "hdm.weap";
 		case WP_HOLYCROSS:         return "cross.weap";
 		case WP_DELISLE:           return "delisle.weap";
 		case WP_DELISLESCOPE:      return "delislescope.weap";
 		case WP_DUMMY_MG42:        return "dummy_mg42.weap";
 		case WP_M1941:             return "m1941.weap";
+		case WP_M1941SCOPE:        return "m1941scope.weap";
 		case WP_NONE:
 		case WP_MONSTER_ATTACK1:
 		case WP_MONSTER_ATTACK2:

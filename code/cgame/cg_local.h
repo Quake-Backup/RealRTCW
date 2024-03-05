@@ -58,6 +58,9 @@ If you have questions concerning this license or the applicable additional terms
 #define PAIN_TWITCH_TIME    200
 #define WEAPON_SELECT_TIME  1400
 #define HOLDABLE_SELECT_TIME 2000   //----(SA)	for drawing holdable icons
+#define OBJECTIVE_MET_TIME  10000
+#define CHECKPOINT_PASSED_TIME 5000
+#define GAME_SAVED_TIME     5000
 #define ITEM_SCALEUP_TIME   1000
 #define ZOOM_TIME           150
 #define ITEM_BLOB_TIME      200
@@ -711,6 +714,7 @@ typedef struct weaponInfo_s {
 	sfxHandle_t reloadSound;
 	sfxHandle_t reloadFastSound;
 	sfxHandle_t	reloadFullSound;
+	sfxHandle_t reloadSoundAi;
 	sfxHandle_t	bounceSound;
 	sfxHandle_t spinupSound;        //----(SA)	added // sound started when fire button goes down, and stepped on when the first fire event happens
 	sfxHandle_t spindownSound;      //----(SA)	added // sound called if the above is running but player doesn't follow through and fire
@@ -941,6 +945,9 @@ typedef struct {
 
 	// message icon popup time	//----(SA)	added
 	int yougotmailTime;
+
+	int checkpointTime;
+	int gameSavedTime;
 
 	//==========================
 
@@ -1855,6 +1862,7 @@ extern vmCvar_t cg_ironChallenge;
 extern vmCvar_t cg_nohudChallenge;
 extern vmCvar_t cg_nopickupChallenge;
 extern vmCvar_t cg_decayChallenge;
+extern vmCvar_t cg_vanilla_plus;
 
 extern vmCvar_t cg_autoReload;
 extern vmCvar_t cg_uinfo;
@@ -2204,11 +2212,6 @@ void CG_SoundPlayIndexedScript( int index, vec3_t org, int entnum );
 void CG_SoundInit( void );
 // done.
 
-void CG_ToggleActiveOnScriptSpeaker( int index );
-void CG_UnsetActiveOnScriptSpeaker( int index );
-void CG_SetActiveOnScriptSpeaker( int index );
-void CG_AddScriptSpeakers( void );
-
 // Ridah, flamethrower
 void CG_FireFlameChunks( centity_t *cent, vec3_t origin, vec3_t angles, float speedScale, qboolean firing, int flags ); //----(SA)	added 'flags'
 void CG_InitFlameChunks( void );
@@ -2411,7 +2414,6 @@ int         trap_CM_MarkFragments( int numPoints, const vec3_t *points,
 // normal sounds will have their volume dynamically changed as their entity
 // moves and the listener moves
 void        trap_S_StartSound( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx );
-void        trap_S_StartSoundVControl( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx, int volume );
 void        trap_S_StartSoundEx( vec3_t origin, int entityNum, int entchannel, sfxHandle_t sfx, int flags );
 void        trap_S_StopLoopingSound( int entnum );
 void        trap_S_StopStreamingSound( int entnum );  // usually AI.  character is talking and needs to be shut up /now/
