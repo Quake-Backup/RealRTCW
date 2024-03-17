@@ -1056,7 +1056,11 @@ qboolean AICast_ScriptAction_SetAmmo( cast_state_t *cs, char *params ) {
 			int amt;
 			amt = atoi( token );
 			if ( amt > 50 + ammoTable[BG_FindAmmoForWeapon( weapon )].maxammo ) {
+				if ( cs->aiCharacter ) { 
 				amt = 999;  // unlimited
+				} else {
+					amt = ammoTable[BG_FindAmmoForWeapon( weapon )].maxammo;
+				}
 			}
 			Add_Ammo( &g_entities[cs->entityNum], weapon, amt, qtrue );
 		} else {
@@ -1787,6 +1791,7 @@ qboolean AICast_ScriptAction_TakeWeapon( cast_state_t *cs, char *params ) {
 		memset( g_entities[cs->entityNum].client->ps.weapons, 0, sizeof( g_entities[cs->entityNum].client->ps.weapons ) );
 		memset( g_entities[cs->entityNum].client->ps.ammo, 0, sizeof( g_entities[cs->entityNum].client->ps.ammo ) );
 		memset( g_entities[cs->entityNum].client->ps.ammoclip, 0, sizeof( g_entities[cs->entityNum].client->ps.ammoclip ) );
+		memset( g_entities[cs->entityNum].client->ps.holdable, 0, sizeof( g_entities[cs->entityNum].client->ps.holdable ) );
 		cs->weaponNum = WP_NONE;
 
 	} else {
@@ -3099,6 +3104,41 @@ qboolean AICast_ScriptAction_FaceTargetAngles( cast_state_t *cs, char *params ) 
 
 	return qtrue;
 }
+
+/*
+=================
+AICast_ScriptAction_FaceEntity
+
+  syntax: face_entity <targetname>
+
+  The AI will look at the target entity
+=================
+*/
+qboolean AICast_ScriptAction_FaceEntity ( cast_state_t *cs, char *params ) {
+    gentity_t *ent;
+	vec3_t org, vec;
+
+	if ( !params || !params[0] ) {
+		G_Error( "AI Scripting: face_entity requires a targetname\n" );
+	}
+		
+	// find this targetname
+	ent = G_Find( NULL, FOFS( targetname ), params );
+	if ( !ent ) {
+		ent = AICast_FindEntityForName( params );
+		if ( !ent ) {
+			G_Error( "AI Scripting: wait cannot find targetname \"%s\"\n", params );
+		    }
+		}
+		// set the view angle manually
+		BG_EvaluateTrajectory( &ent->s.pos, level.time, org );
+		VectorSubtract( org, cs->bs->origin, vec );
+		VectorNormalize( vec );
+		vectoangles( vec, cs->ideal_viewangles );
+
+	return qtrue;
+}
+
 
 /*
 ===================

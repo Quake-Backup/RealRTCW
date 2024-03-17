@@ -2013,22 +2013,28 @@ static void PM_Footsteps( void ) {
 
 		// now footsteps
 	#ifdef GAMEDLL
+	    if ( !pm->ps->aiChar ) {
 		if (g_realism.value) {
 			pm->ps->footstepCount += pm_realismSlowScale * (GetWeaponTableData(pm->ps->weapon)->moveSpeed * (pm->xyspeed * pml.frametime));
 		} else {
 			pm->ps->footstepCount += (GetWeaponTableData(pm->ps->weapon)->moveSpeed * (pm->xyspeed * pml.frametime));
 		}
+		} else {
+		    pm->ps->footstepCount  += 1.0 * (pm->xyspeed * pml.frametime);
+		}
 	
 	#endif
 	#ifdef CGAMEDLL
+		if ( !pm->ps->aiChar ) {
 		if (cg_realism.value) {
 			pm->ps->footstepCount += pm_realismSlowScale * (GetWeaponTableData(pm->ps->weapon)->moveSpeed * (pm->xyspeed * pml.frametime));
 		} else {
 		    pm->ps->footstepCount += (GetWeaponTableData(pm->ps->weapon)->moveSpeed * (pm->xyspeed * pml.frametime));
 		}
+		} else {
+		    pm->ps->footstepCount  += 1.0 * (pm->xyspeed * pml.frametime);
+		}
 	#endif
-
-
 
 		if ( pm->ps->footstepCount > animGap ) {
 
@@ -4502,10 +4508,22 @@ void PM_LadderMove( void ) {
 		if ( pm->ps->aiChar ) {
 			wishvel[2] = 0.5 * upscale * scale * (float)pm->cmd.forwardmove;
 		} else { // player speed
-			wishvel[2] = 0.9 * upscale * scale * (float)pm->cmd.forwardmove;
+	            #ifdef GAMEDLL
+				if (g_realism.value) {
+			    wishvel[2] = 0.7 * upscale * scale * (float)pm->cmd.forwardmove;
+		        } else {
+			    wishvel[2] = 0.9 * upscale * scale * (float)pm->cmd.forwardmove;
+		        }
+				#endif
+				 #ifdef CGAMEDLL
+				if (cg_realism.value) {
+			    wishvel[2] = 0.7 * upscale * scale * (float)pm->cmd.forwardmove;
+		        } else {
+			    wishvel[2] = 0.9 * upscale * scale * (float)pm->cmd.forwardmove;
+		        }
+				#endif
 		}
 	}
-//Com_Printf("wishvel[2] = %i, fwdmove = %i\n", (int)wishvel[2], (int)pm->cmd.forwardmove );
 
 	if ( pm->cmd.rightmove ) {
 		// strafe, so we can jump off ladder
