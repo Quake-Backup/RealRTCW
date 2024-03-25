@@ -468,6 +468,10 @@ int Pickup_Ammo( gentity_t *ent, gentity_t *other ) {
 
 	Add_Ammo( other, ent->item->giTag, quantity, qfalse );   //----(SA)	modified
 
+	if (strcmp(ent->item->classname, "ammo_panzerfaust") == 0) {
+       COM_BitSet( other->client->ps.weapons, WP_PANZERFAUST);
+    }
+
 	// single player has no respawns	(SA)
 
 		if ( !( ent->spawnflags & 8 ) ) {
@@ -1091,7 +1095,8 @@ void FinishSpawningItem( gentity_t *ent ) {
     return;
 	}
 
-	if ( !g_fullarsenal.integer && (   ent->item->giWeapon == WP_MP34 
+    // Classic arsenal
+	if ( g_fullarsenal.integer == 0 && (   ent->item->giWeapon == WP_MP34 
 	                                || ent->item->giWeapon == WP_REVOLVER 
 									|| ent->item->giWeapon == WP_G43 
 									|| ent->item->giWeapon == WP_M1GARAND 
@@ -1102,12 +1107,14 @@ void FinishSpawningItem( gentity_t *ent ) {
 									|| ent->item->giWeapon == WP_M7
 									|| ent->item->giWeapon == WP_BROWNING
 									|| ent->item->giWeapon == WP_M1941
-									|| ent->item->giWeapon == WP_AUTO5 ) )
+									|| ent->item->giWeapon == WP_AUTO5 
+									|| ent->item->giWeapon == WP_M1941SCOPE ) )
 	{
     return;
 	}
-
-	if ( !g_dlc1.integer &&       (    ent->item->giWeapon == WP_M1941SCOPE
+    
+	// RealRTCW arsenal without extra guns, value 2 will ge everything
+	if ( g_fullarsenal.integer == 1 && ( ent->item->giWeapon == WP_M1941SCOPE
 									|| ent->item->giWeapon == WP_DELISLE
 									|| ent->item->giWeapon == WP_M1941
 									|| ent->item->giWeapon == WP_AUTO5 ) )

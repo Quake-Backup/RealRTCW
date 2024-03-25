@@ -1051,8 +1051,11 @@ qboolean AICast_ScriptAction_SetAmmo( cast_state_t *cs, char *params ) {
 
 	if ( weapon != WP_NONE ) {
 		// give them the ammo
-
-		if ( atoi( token ) ) {
+		if (Q_strcasecmp(token, "full") == 0) {
+        // Set the ammo amount to the maximum ammo size for the weapon
+        int amt = ammoTable[BG_FindAmmoForWeapon( weapon )].maxammo;
+        Add_Ammo( &g_entities[cs->entityNum], weapon, amt, qtrue );
+    } else if ( atoi( token ) ) {
 			int amt;
 			amt = atoi( token );
 			if ( amt > 50 + ammoTable[BG_FindAmmoForWeapon( weapon )].maxammo ) {
@@ -1121,6 +1124,10 @@ qboolean AICast_ScriptAction_SetClip( cast_state_t *cs, char *params ) {
 	}
 
 	if ( weapon != WP_NONE ) {
+		if (Q_strcasecmp(token, "full") == 0) {
+        // Set the clip amount to the maximum clip size for the weapon
+        g_entities[cs->entityNum].client->ps.ammoclip[BG_FindClipForWeapon( weapon )] = ammoTable[weapon].maxclip;
+    } else {
 
 		int spillover = atoi( token ) - ammoTable[weapon].maxclip;
 
@@ -1132,6 +1139,7 @@ qboolean AICast_ScriptAction_SetClip( cast_state_t *cs, char *params ) {
 			// set the clip amount to the exact specified value
 			g_entities[cs->entityNum].client->ps.ammoclip[weapon] = atoi( token );
 		}
+	}
 
 	} else {
 //		G_Printf( "--SCRIPTER WARNING-- AI Scripting: setclip: unknown weapon \"%s\"\n", params );
@@ -2496,7 +2504,17 @@ qboolean AICast_ScriptAction_Accum( cast_state_t *cs, char *params ) {
 			G_Error( "AI Scripting: accum %s requires a parameter\n", lastToken );
 		}
 		cs->scriptAccumBuffer[bufferIndex] = rand() % atoi( token );
-	} else {
+	} else if ( !Q_stricmp( lastToken, "random_no_zero" ) ) {
+    if ( !token[0] ) {
+        G_Error( "AI Scripting: accum %s requires a parameter\n", lastToken );
+    }
+    int tokenValue = atoi(token);
+    if (tokenValue > 1) {
+        cs->scriptAccumBuffer[bufferIndex] = (rand() % (tokenValue - 1)) + 1;
+    } else {
+        G_Error( "AI Scripting: accum %s requires a parameter greater than 1\n", lastToken );
+    }
+}  else {
 		G_Error( "AI Scripting: accum %s: unknown command\n", params );
 	}
 

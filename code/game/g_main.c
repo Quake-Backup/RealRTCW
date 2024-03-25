@@ -167,7 +167,6 @@ vmCvar_t g_regen;
 vmCvar_t g_flushItems;	// items land depending on the slope thy're on
 vmCvar_t g_midgame;
 vmCvar_t g_vanilla_guns;
-vmCvar_t g_dlc1;
 
 vmCvar_t g_mapname;
 
@@ -200,7 +199,6 @@ cvarTable_t gameCvarTable[] = {
 	{ &g_regen, "g_regen", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 	{ &g_midgame, "g_midgame", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 	{ &g_vanilla_guns, "g_vanilla_guns", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
-	{ &g_dlc1, "g_dlc1", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 
 	{ &g_reloading, "g_reloading", "0", CVAR_ROM },   //----(SA)	added
 
@@ -214,7 +212,7 @@ cvarTable_t gameCvarTable[] = {
 	{ &g_spawndogs, "g_spawndogs", "1", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 	{ &g_spawnpriests, "g_spawnpriests", "1", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 	{ &g_spawnxshepherds, "g_spawnxshepherds", "1", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
-	{ &g_aicanheadshot, "g_aicanheadshot", "0", CVAR_ARCHIVE, 0, qfalse },
+	{ &g_aicanheadshot, "g_aicanheadshot", "1", CVAR_ARCHIVE, 0, qfalse },
 	{ &g_LTChargeTime, "g_LTChargeTime", "35000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse },
 	{ &g_soldierChargeTime, "g_soldierChargeTime", "20000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse },
 // jpw
@@ -304,7 +302,7 @@ cvarTable_t gameCvarTable[] = {
 	{ &g_localTeamPref, "g_localTeamPref", "", 0, 0, qfalse },
 
 	{ &g_bodysink, "g_bodysink", "0", CVAR_ARCHIVE },
-	{ &g_weaponfalloff, "g_weaponfalloff", "1", CVAR_CHEAT },
+	{ &g_weaponfalloff, "g_weaponfalloff", "1", CVAR_ARCHIVE },
 	{ &g_flushItems,	"g_flushItems",		"1",	0 },
 	{ &g_mapname, "mapname", "", CVAR_ARCHIVE }
 };

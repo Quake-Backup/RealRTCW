@@ -593,8 +593,7 @@ qboolean IsHeadShotWeapon( int mod, gentity_t *targ, gentity_t *attacker ) {
 		   if ( mod == MOD_SNIPERRIFLE ||
 			    mod == MOD_SNOOPERSCOPE ||
 			    mod == MOD_DELISLESCOPE ||
-				mod == MOD_M1941SCOPE ||
-			    mod == MOD_MAUSER ) {
+				mod == MOD_M1941SCOPE ) {
 			    return qtrue;
 		        }
 		return qfalse;
@@ -649,6 +648,7 @@ qboolean IsHeadShotWeapon( int mod, gentity_t *targ, gentity_t *attacker ) {
 	case MOD_SNIPERRIFLE:
 	case MOD_BROWNING:
 	case MOD_MG42M:
+	case MOD_M1941SCOPE:
 	return qtrue;
 	}
 	return qfalse;
@@ -1114,9 +1114,14 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			damage *= 0.5;
 		}
 
+		if ( venomgun && targ->aiCharacter == AICHAR_LOPER ) {
+			//LOPER gets special venom damage
+			damage *= 1.2;
+		}
+
 		if ( venomgun && targ->aiCharacter == AICHAR_SUPERSOLDIER ) {
 			//supersoldier gets special venom damage
-			damage *= 0.6;
+			damage *= 0.8;
 		}
 
 	
