@@ -167,6 +167,7 @@ vmCvar_t g_regen;
 vmCvar_t g_flushItems;	// items land depending on the slope thy're on
 vmCvar_t g_midgame;
 vmCvar_t g_vanilla_guns;
+vmCvar_t g_dlc1;
 
 vmCvar_t g_mapname;
 
@@ -199,6 +200,7 @@ cvarTable_t gameCvarTable[] = {
 	{ &g_regen, "g_regen", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 	{ &g_midgame, "g_midgame", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 	{ &g_vanilla_guns, "g_vanilla_guns", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
+	{ &g_dlc1, "g_dlc1", "0", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse },
 
 	{ &g_reloading, "g_reloading", "0", CVAR_ROM },   //----(SA)	added
 
@@ -302,7 +304,7 @@ cvarTable_t gameCvarTable[] = {
 	{ &g_localTeamPref, "g_localTeamPref", "", 0, 0, qfalse },
 
 	{ &g_bodysink, "g_bodysink", "0", CVAR_ARCHIVE },
-	{ &g_weaponfalloff, "g_weaponfalloff", "1", CVAR_ARCHIVE },
+	{ &g_weaponfalloff, "g_weaponfalloff", "0", CVAR_ARCHIVE },
 	{ &g_flushItems,	"g_flushItems",		"1",	0 },
 	{ &g_mapname, "mapname", "", CVAR_ARCHIVE }
 };
@@ -604,11 +606,14 @@ void G_CheckForCursorHints( gentity_t *ent ) {
 
 		// check for friendly.
 		if ( traceEnt->aiTeam == AITEAM_ALLIES || traceEnt->aiTeam == AITEAM_NEUTRAL ) {
-			hintType = HINT_PLYR_FRIEND;
-			hintDist = CH_FRIENDLY_DIST;    // far, since this will be used to determine whether to shoot bullet weaps or not
+			if (traceEnt->canSpeak == 1 ) {
+			    hintType = HINT_PLYR_FRIEND;
+			    hintDist = CH_ACTIVATE_DIST; 
+			}
 		}
 
 	}
+
 	//
 	// OTHER ENTITIES
 	//

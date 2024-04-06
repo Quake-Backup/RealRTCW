@@ -439,6 +439,8 @@ struct gentity_s {
 
 	// -------------------------------------------------------------------------------------------
 	// if working on a post release patch, new variables should ONLY be inserted after this point
+
+	int canSpeak;               // can this entity speak?
 };
 
 // Ridah
@@ -1121,6 +1123,7 @@ extern vmCvar_t g_fullarsenal;
 extern vmCvar_t g_endmapbonus;
 extern vmCvar_t g_randomweapons;
 extern vmCvar_t g_midgame;
+extern vmCvar_t g_dlc1;
 
 extern vmCvar_t g_reloading;        //----(SA)	added
 
