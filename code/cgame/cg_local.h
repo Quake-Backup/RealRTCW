@@ -696,6 +696,7 @@ typedef struct weaponInfo_s {
 	float flashDlight;
 	vec3_t flashDlightColor;
 	sfxHandle_t flashSound[4];          // fast firing weapons randomly choose
+	sfxHandle_t flashSoundAi[4];         // fast firing weapons randomly choose
 	sfxHandle_t flashEchoSound[4];      //----(SA)	added - distant gun firing sound
 	sfxHandle_t lastShotSound[4];       // sound of the last shot can be different (mauser doesn't have bolt action on last shot for example)
 
@@ -1755,6 +1756,7 @@ extern vmCvar_t cg_simpleItems;
 extern vmCvar_t cg_fov;
 extern vmCvar_t cg_fixedAspect;
 extern vmCvar_t cg_fixedAspectFOV;
+extern vmCvar_t cg_drawCheckpoint;
 extern vmCvar_t cg_oldWolfUI;
 extern vmCvar_t cg_drawStatusHead;
 extern vmCvar_t cg_hudWeapIcon;

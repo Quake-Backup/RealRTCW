@@ -79,6 +79,7 @@ void TossClientItems( gentity_t *self ) {
 	case AICHAR_LOPER:
 	case AICHAR_PROTOSOLDIER:
 	case AICHAR_SUPERSOLDIER:
+	case AICHAR_SUPERSOLDIER_LAB:
 	case AICHAR_DOG:
 	case AICHAR_PRIEST:
 	case AICHAR_XSHEPHERD:
@@ -246,7 +247,7 @@ void body_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int d
 		return;
 	}
 
-	if ( self->aiCharacter == AICHAR_HEINRICH || self->aiCharacter == AICHAR_HELGA || self->aiCharacter == AICHAR_SUPERSOLDIER || self->aiCharacter == AICHAR_PROTOSOLDIER ) {
+	if ( self->aiCharacter == AICHAR_HEINRICH || self->aiCharacter == AICHAR_HELGA || self->aiCharacter == AICHAR_SUPERSOLDIER || self->aiCharacter == AICHAR_SUPERSOLDIER_LAB || self->aiCharacter == AICHAR_PROTOSOLDIER ) {
 		if ( self->health <= GIB_HEALTH ) {
 			self->health = -1;
 			return;
@@ -773,6 +774,8 @@ void G_ArmorDamage( gentity_t *targ ) {
 		numParts = 9;
 	} else if ( targ->s.aiChar == AICHAR_SUPERSOLDIER ) {
 		numParts = 14;
+	} else if ( targ->s.aiChar == AICHAR_SUPERSOLDIER_LAB ) {
+		numParts = 14;
 	} else if ( targ->s.aiChar == AICHAR_HEINRICH ) {
 		numParts = 20;
 	} else {
@@ -1096,6 +1099,10 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 
 		qboolean dynamite = (qboolean)( mod == MOD_DYNAMITE || mod == MOD_DYNAMITE_SPLASH );
 
+		qboolean shotguns = (qboolean)( mod == MOD_M97 || mod == MOD_AUTO5 );
+
+		qboolean panzer = (qboolean)( mod == MOD_PANZERFAUST );
+
 		qboolean venomgun = (qboolean)( mod == MOD_VENOM );
 
 		if ( targ == attacker ) {
@@ -1104,24 +1111,53 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 			}
 		}
 
+        // Helga special damage cases
 		if ( dynamite && targ->aiCharacter == AICHAR_HELGA ) {
-			//helga gets special dynamite damage
 			damage *= 0.5;
 		}
 
+        // Heinrich special damage cases
 		if ( venomgun && targ->aiCharacter == AICHAR_HEINRICH ) {
-			//heinrich gets special venom damage
 			damage *= 0.5;
 		}
 
+		if ( panzer && targ->aiCharacter == AICHAR_HEINRICH ) {
+			damage *= 0.6;
+		}
+
+		if ( shotguns && targ->aiCharacter == AICHAR_HEINRICH ) {
+			damage *= 0.5;
+		}
+
+        // Loper special damage cases
 		if ( venomgun && targ->aiCharacter == AICHAR_LOPER ) {
-			//LOPER gets special venom damage
 			damage *= 1.2;
 		}
 
+
+        // Supersoldier special damage cases
 		if ( venomgun && targ->aiCharacter == AICHAR_SUPERSOLDIER ) {
-			//supersoldier gets special venom damage
-			damage *= 0.8;
+			damage *= 0.7;
+		}
+
+		if ( venomgun && targ->aiCharacter == AICHAR_SUPERSOLDIER_LAB ) {
+			damage *= 0.7;
+		}
+
+		if ( panzer && targ->aiCharacter == AICHAR_SUPERSOLDIER_LAB ) {
+			damage *= 0.6;
+		}
+
+		if ( panzer && targ->aiCharacter == AICHAR_SUPERSOLDIER ) {
+			damage *= 0.6;
+		}
+
+		if ( shotguns && targ->aiCharacter == AICHAR_SUPERSOLDIER ) {
+			damage *= 0.6;
+		}
+
+		if ( shotguns && targ->aiCharacter == AICHAR_SUPERSOLDIER_LAB ) {
+			damage *= 0.6;
 		}
 
 	
