@@ -893,6 +893,12 @@ typedef struct {
 	char centerPrint[1024];
 	int centerPrintLines;
 
+	int subtitlePrintTime;
+	int subtitlePrintCharWidth;
+	int subtitlePrintY;
+	char subtitlePrint[1024];
+	int subtitlePrintLines;
+
 	// fade in/out
 	int fadeTime;
 	float fadeRate;
@@ -1721,6 +1727,7 @@ extern vmCvar_t cg_crosshairHealth;
 extern vmCvar_t cg_drawStatus;
 extern vmCvar_t cg_draw2D;
 extern vmCvar_t cg_drawSubtitles;
+extern vmCvar_t cg_subtitleSize;
 extern vmCvar_t cg_drawFrags;
 extern vmCvar_t cg_animSpeed;
 extern vmCvar_t cg_debugAnim;
@@ -2313,6 +2320,7 @@ void CG_DrawInformation( void );
 const char *CG_translateString( const char *str );
 const char *CG_bonusString( const char *str );
 const char *CG_translateTextString( const char *str );
+const char *CG_translateTextString2( const char *str );
 
 
 //

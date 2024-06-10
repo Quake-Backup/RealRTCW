@@ -1799,36 +1799,51 @@ for a few moments
 void CG_SubtitlePrint( const char *str, int y, int charWidth ) {
 	char   *s;
 	int len;
-//----(SA)	added translation lookup
-	Q_strncpyz( cg.centerPrint, CG_translateTextString( (char*)str ), sizeof( cg.centerPrint ) );
-//----(SA)	end
+
+
+    // Translate the input string
+    const char* translated = CG_translateTextString(str);
+
+    // Check if the translated string is "IGNORED_SUBTITLE", indicating an ignored subtitle
+    if (strcmp(translated, "IGNORED_SUBTITLE") == 0) {
+        // If it is, return immediately to prevent the subtitle from being displayed
+        return;
+    }
+
+    // Copy the translated string to cg.subtitlePrint
+    Q_strncpyz(cg.subtitlePrint, translated, sizeof(cg.subtitlePrint));
 
 
 	
-	cg.centerPrintY = y;
-	cg.centerPrintCharWidth = charWidth;
+	cg.subtitlePrintY = y;
+	cg.subtitlePrintCharWidth = charWidth;
 
 	// count the number of lines for centering
-	cg.centerPrintLines = 1;
-	s = cg.centerPrint;
+	cg.subtitlePrintLines = 1;
+	s = cg.subtitlePrint;
 	while ( *s ) {
 		if ( *s == '\n' ) {
-			cg.centerPrintLines++;
+			cg.subtitlePrintLines++;
 		}
 		if ( !Q_strncmp( s, "\\n", 1 ) ) {
-			cg.centerPrintLines++;
+			cg.subtitlePrintLines++;
 			s++;
 		}
 		s++;
 	}
-	len = CG_DrawStrlen(cg.centerPrint);
-	if (len > 85) {
-		cg.centerPrintTime = cg.time + len * 230;
-	} else if (len > 50) {
-		cg.centerPrintTime = cg.time + len * 125;
-	} else {
-		cg.centerPrintTime = cg.time;
-	}
+    // Calculate the number of characters in the message
+    len = CG_DrawStrlen(cg.subtitlePrint);
+	// Calculate the display time based on an average reading speed of 17 characters per second
+    int displayTime = (len / 17.0) * 1000; // Convert to milliseconds
+
+	// Ensure the display time is at least a certain minimum value to prevent very short messages from disappearing too quickly
+    int minDisplayTime = 2000; // 2 seconds
+    if (displayTime < minDisplayTime) {
+       displayTime = minDisplayTime;
+    }
+
+	// Set the time at which the message should disappear
+    cg.subtitlePrintTime = cg.time + displayTime;
 }
 
 /*
@@ -1892,6 +1907,74 @@ static void CG_DrawCenterString( void ) {
 		}
 		start++;
 	}
+
+	trap_R_SetColor( NULL );
+}
+
+/*
+===================
+CG_DrawSubtitleString
+===================
+*/
+static void CG_DrawSubtitleString( void ) {
+	char    *start;
+	int l;
+	int x, y, w;
+	float   *color;
+
+	if ( !cg.subtitlePrintTime ) {
+		return;
+	}
+
+	color = CG_FadeColor( cg.subtitlePrintTime, 1000 * cg_centertime.value );
+	if ( !color ) {
+		return;
+	}
+
+	if ( cg_fixedAspect.integer ) {
+		CG_SetScreenPlacement(PLACE_CENTER, PLACE_CENTER);
+	}
+
+	trap_R_SetColor( color );
+
+	start = cg.subtitlePrint;
+
+	y = cg.subtitlePrintY - cg.subtitlePrintLines * BIGCHAR_HEIGHT / 2;
+
+while ( 1 ) {
+    char linebuffer[1024]; // Buffer size
+
+    for ( l = 0; l < 50; l++ ) { // Line length limit
+        if ( !start[l] || start[l] == '\n' || !Q_strncmp( &start[l], "\\n", 1 ) ) {
+            break;
+        }
+        linebuffer[l] = start[l];
+        if (l >= 49 && start[l+1] != ' ' && start[l+1] != '\0') { // Check if the next character is a space or end of string
+            while(l > 0 && linebuffer[l] != ' ') { // Move back to the last space
+                l--;
+            }
+            break;
+        }
+    }
+    linebuffer[l] = 0;
+
+    w = cg.subtitlePrintCharWidth * CG_DrawStrlen( linebuffer );
+
+    x = ( SCREEN_WIDTH - w ) / 2;
+
+    CG_DrawStringExt( x, y, linebuffer, color, qfalse, qfalse, cg.subtitlePrintCharWidth, (int)( cg.subtitlePrintCharWidth * 1.5 ), 0 );
+
+    y += cg.subtitlePrintCharWidth * 2;
+
+    // Skip processed characters and newline characters
+    start += l;
+    while ( *start && ( *start == '\n' || !Q_strncmp( start, "\\n", 1 ) ) ) {
+        start++;
+    }
+    if ( !*start ) {
+        break;
+    }
+}
 
 	trap_R_SetColor( NULL );
 }
@@ -2938,6 +3021,7 @@ CG_DrawIntermission
 static void CG_DrawIntermission( void ) {
 
 	CG_DrawCenterString();
+	CG_DrawSubtitleString();
 	return;
 
 	//cg.scoreFadeTime = cg.time;
@@ -3685,7 +3769,7 @@ if ( !cg_oldWolfUI.integer ) {
 	// don't draw center string if scoreboard is up
 	if ( !CG_DrawScoreboard() ) {
 		CG_DrawCenterString();
-
+		CG_DrawSubtitleString();
 		CG_DrawObjectiveInfo();     // NERVE - SMF
 	}
 
