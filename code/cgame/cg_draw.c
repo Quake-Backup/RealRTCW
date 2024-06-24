@@ -1962,7 +1962,12 @@ while ( 1 ) {
 
     x = ( SCREEN_WIDTH - w ) / 2;
 
-    CG_DrawStringExt( x, y, linebuffer, color, qfalse, qfalse, cg.subtitlePrintCharWidth, (int)( cg.subtitlePrintCharWidth * 1.5 ), 0 );
+
+    if ( cg_subtitleShadow.integer ) {
+       CG_DrawStringExt( x, y, linebuffer, color, qfalse, qtrue, cg.subtitlePrintCharWidth, (int)( cg.subtitlePrintCharWidth * 1.5 ), 0 );
+	} else {
+       CG_DrawStringExt( x, y, linebuffer, color, qfalse, qfalse, cg.subtitlePrintCharWidth, (int)( cg.subtitlePrintCharWidth * 1.5 ), 0 );
+	}
 
     y += cg.subtitlePrintCharWidth * 2;
 
@@ -2848,7 +2853,7 @@ static void CG_DrawDynamiteStatus( void ) {
 	w = CG_DrawStrlen( name ) * BIGCHAR_WIDTH;
 
 	color[3] *= cg_hudAlpha.value;
-	CG_DrawBigStringColor( 320 - w / 2, 170, name, color );
+	CG_DrawBigStringColor( 300 - w / 2, 170, name, color );
 
 	trap_R_SetColor( NULL );
 }
@@ -3679,6 +3684,8 @@ static void CG_Draw2D(stereoFrame_t stereoFrame) {
 	if ( cg_nohudChallenge.integer ) {
 		CG_DrawFlashBlend();    // (for fades)
 		CG_DrawWeapReticle();   // (for scopes)
+		CG_DrawCrosshair();
+		CG_DrawHoldableSelect();
 	if ( cg.zoomedBinoc ) {
 		CG_DrawBinocReticle();  // (for binocs)
 		return;
