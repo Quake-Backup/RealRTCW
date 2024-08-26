@@ -2204,7 +2204,7 @@ int reloadableWeapons[] = {
 	WP_MAUSER,      WP_SNIPERRIFLE, WP_SNOOPERSCOPE,    WP_MOSIN,               WP_M1GARAND,            WP_G43,
 	WP_MP44,        WP_BAR,         WP_M97,             WP_FG42SCOPE,           WP_BROWNING,            WP_VENOM,
 	WP_P38,         WP_M30,         WP_DELISLE,         WP_DELISLESCOPE,        WP_TESLA,               WP_M1941,
-	WP_AUTO5,       WP_M1941SCOPE,  WP_DUAL_TT33, -1
+	WP_AUTO5,       WP_M1941SCOPE,  WP_DUAL_TT33,       WP_HDM, -1
 };
 
 // new (10/18/00)
@@ -3100,7 +3100,7 @@ model="models/weapons2/mauser/mauser.md3"
 		IT_WEAPON,
 		WP_DELISLE,
 		WP_DELISLE,
-		WP_COLT,
+		WP_DELISLE,
 		WP_DELISLE,
 		"",                      
 		"",                      
@@ -3127,7 +3127,7 @@ model="models/weapons2/mauser/mauser.md3"
 		IT_WEAPON,
 		WP_DELISLESCOPE,
 		WP_DELISLESCOPE,
-		WP_COLT,
+		WP_DELISLE,
 		WP_DELISLE,
 		"",                      
 		"",                      
@@ -4565,6 +4565,62 @@ model="models/powerups/ammo/barammo.md3"
 		"",                 
 		"",                  
 		{40,40,30,30,30}	
+	},
+
+/*QUAKED ammo_hdmammo (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
+used by: HDM
+
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/ammo/barammo.md3"
+*/
+{
+		"ammo_hdm",
+		"sound/misc/am_pkup.wav",
+		{ 
+		"models/powerups/ammo/22cal.md3",
+		0, 
+		0
+		},
+
+		"icons/iconw_luger_1", 
+		"ammo_hdm",           
+		60,
+		IT_AMMO,
+		WP_NONE,
+		WP_HDM,
+		WP_HDM,
+		WP_HDM,
+		"",                 
+		"",                  
+		{50,40,40,30,30}	
+	},
+
+/*QUAKED ammo_delisle (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
+used by: HDM
+
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/ammo/am45cal_m.md3"
+*/
+{
+		"ammo_delisle",
+		"sound/misc/am_pkup.wav",
+		{ 
+		"models/powerups/ammo/am45cal_m.md3",
+		0, 
+		0
+		},
+
+		"icons/iconw_luger_1", 
+		"ammo_delisle",           
+		60,
+		IT_AMMO,
+		WP_NONE,
+		WP_DELISLE,
+		WP_DELISLE,
+		WP_DELISLE,
+		"",                 
+		"",                  
+		{30,30,30,20,20}	
 	},
 
 /*QUAKED ammo_44ammo (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
