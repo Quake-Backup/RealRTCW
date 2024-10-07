@@ -343,7 +343,8 @@ typedef enum {
 	STAT_DEAD_YAW,                  // look this direction when dead (FIXME: get rid of?)
 	STAT_CLIENTS_READY,             // bit mask of clients wishing to exit the intermission (FIXME: configstring?)
 	STAT_MAX_HEALTH,                // health / armor limit, changable by handicap
-	STAT_PLAYER_CLASS               // DHM - Nerve :: player class in multiplayer
+	STAT_PLAYER_CLASS,               // DHM - Nerve :: player class in multiplayer
+	STAT_PERK
 } statIndex_t;
 
 
@@ -367,7 +368,8 @@ typedef enum {
 	PERS_ACCURACY_SHOTS,
 	PERS_ACCURACY_HITS,
 	PERS_HWEAPON_USE, // Rafael - mg42
-	PERS_WOLFKICK // Rafael wolfkick
+	PERS_WOLFKICK, // Rafael wolfkick
+	PERS_KILLS
 
 } persEnum_t;
 
@@ -419,7 +421,9 @@ typedef enum {
 	PW_NONE,
 	PW_QUAD,
 	PW_BATTLESUIT,
+	PW_BATTLESUIT_SURV,
 	PW_HASTE,
+	PW_HASTE_SURV,
 	PW_INVIS,
 	PW_REGEN,
 	PW_FLIGHT,
@@ -428,6 +432,7 @@ typedef enum {
 	PW_REDFLAG,
 	PW_BLUEFLAG,
 	PW_BALL,
+	PW_VAMPIRE,
 	PW_NUM_POWERUPS
 } powerup_t;
 
@@ -458,6 +463,15 @@ typedef enum {
 	HI_NUM_HOLDABLE
 } holdable_t;
 
+typedef enum {
+	PERK_NONE,
+	PERK_RESILIENCE,
+	PERK_SCAVENGER,
+	PERK_RUNNER,
+	PERK_WEAPONHANDLING,
+	NUM_PERKS
+} perk_t;
+
 typedef enum
 {
 	AICHAR_NONE,
@@ -480,6 +494,8 @@ typedef enum
 	AICHAR_PRIEST,
 	AICHAR_XSHEPHERD,
 	AICHAR_SUPERSOLDIER_LAB,
+	AICHAR_ZOMBIE_SURV,
+	AICHAR_ZOMBIE_GHOST,
 	NUM_CHARACTERS
 } AICharacters_t;
 
@@ -757,6 +773,7 @@ typedef enum {
 	EV_VENOMFULL,
 	EV_BULLET,              // otherEntity is the shooter
 	EV_LOSE_HAT,            
+	EV_REATTACH_HAT,
 	EV_GIB_HEAD,            // only blow off the head
 	EV_PAIN,
 	EV_CROUCH_PAIN,
@@ -767,6 +784,7 @@ typedef enum {
 	EV_OBITUARY,
 	EV_POWERUP_QUAD,
 	EV_POWERUP_BATTLESUIT,
+	EV_POWERUP_BATTLESUIT_SURV,
 	EV_POWERUP_REGEN,
 	EV_GIB_PLAYER,          // gib a previously living player
 	EV_GIB_VAMPIRISM,
@@ -1012,6 +1030,9 @@ typedef enum {
 	WEAP_DROP2,
 	WEAP_SPRINTIN,
 	WEAP_SPRINTOUT,
+	WEAP_RELOAD1_FAST,
+	WEAP_RELOAD2_FAST,
+	WEAP_RELOAD3_FAST,
 	MAX_WP_ANIMATIONS
 } weapAnimNumber_t;
 
@@ -1186,23 +1207,22 @@ typedef enum {
 
 typedef enum
 {
-	WEAPON_CLASS_NONE,
-	WEAPON_CLASS_MELEE,
-	WEAPON_CLASS_PISTOL,
-	WEAPON_CLASS_SMG,
-	WEAPON_CLASS_RIFLE,
-	WEAPON_CLASS_ASSAULT_RIFLE,
-	WEAPON_CLASS_SHOTGUN,
-	WEAPON_CLASS_GRENADE,
-	WEAPON_CLASS_RIFLENADE,
-	WEAPON_CLASS_MG,
-	WEAPON_CLASS_LAUNCHER,
-	WEAPON_CLASS_BEAM,
-	WEAPON_CLASS_SCOPED,
-	WEAPON_CLASS_SCOPABLE,
-	WEAPON_CLASS_AKIMBO,
-	WEAPON_CLASS_UNUSED
-
+	WEAPON_CLASS_NONE  =         0b0000000000000000,
+	WEAPON_CLASS_MELEE =         0b0000000000000001,
+	WEAPON_CLASS_PISTOL =        0b0000000000000010,
+	WEAPON_CLASS_SMG =           0b0000000000000100,
+	WEAPON_CLASS_RIFLE =         0b0000000000001000,
+	WEAPON_CLASS_ASSAULT_RIFLE = 0b0000000000010000,
+	WEAPON_CLASS_SHOTGUN =       0b0000000000100000,
+	WEAPON_CLASS_GRENADE =       0b0000000001000000,
+	WEAPON_CLASS_RIFLENADE =     0b0000000010000000,
+	WEAPON_CLASS_MG =            0b0000000100000000,
+	WEAPON_CLASS_LAUNCHER =      0b0000001000000000,
+	WEAPON_CLASS_BEAM =          0b0000010000000000,
+	WEAPON_CLASS_SCOPED =        0b0000100000000000,
+	WEAPON_CLASS_SCOPABLE =      0b0001000000000000,
+	WEAPON_CLASS_AKIMBO =        0b0010000000000000,
+	WEAPON_CLASS_UNUSED =        0b0100000000000000,
 } weaponClass_t;
 
 typedef enum
@@ -1233,7 +1253,8 @@ typedef enum {
 	IT_KEY,
 	IT_TREASURE,            // gold bars, etc.  things that can be picked up and counted for a tally at end-level
 	IT_CLIPBOARD,           // 'clipboard' used as a general term for 'popup' items where you pick up the item and it pauses and opens a menu
-	IT_TEAM
+	IT_TEAM,
+	IT_PERK
 } itemType_t;
 
 #define MAX_ITEM_MODELS 3
@@ -1277,9 +1298,11 @@ gitem_t *BG_FindItemForAmmo( int ammo );
 gitem_t *BG_FindItemForKey( wkey_t k, int *index );
 weapon_t BG_FindAmmoForWeapon( weapon_t weapon );
 weapon_t BG_FindClipForWeapon( weapon_t weapon );
+gitem_t *BG_FindItemForPerk( perk_t perk );
 
 qboolean BG_AkimboFireSequence( int weapon, int akimboClip, int coltClip );
 
+#define IS_VALID_WEAPON(w) ((w) > WP_NONE && (w) < WP_NUM_WEAPONS)
 #define ITEM_INDEX( x ) ( ( x ) - bg_itemlist )
 
 qboolean    BG_CanItemBeGrabbed( const entityState_t *ent, const playerState_t *ps );

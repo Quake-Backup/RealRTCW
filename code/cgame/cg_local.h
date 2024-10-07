@@ -497,14 +497,14 @@ typedef struct localEntity_s {
 
 } localEntity_t;
 
-/*typedef struct delayedBrass_s {
+typedef struct delayedBrass_s {
 	struct centity_s *centity;
 	int time;
 	void ( *ejectBrassFunc )( centity_t * );
 	struct delayedBrass_s *prev;
 	struct delayedBrass_s *next;
 
-} delayedBrass_t;*/
+} delayedBrass_t;
 
 //======================================================================
 
@@ -714,9 +714,7 @@ typedef struct weaponInfo_s {
 	vec3_t missileDlightColor;
 	int missileRenderfx;
 
-	//void ( *ejectBrassFunc )( centity_t *, int delay );
-
-    void ( *ejectBrassFunc )( centity_t * );
+	void ( *ejectBrassFunc )( centity_t *, int delay );
 
 	float trailRadius;
 	float wiTrailTime;
@@ -725,8 +723,10 @@ typedef struct weaponInfo_s {
 	sfxHandle_t firingSound;
 	sfxHandle_t overheatSound;
 	sfxHandle_t reloadSound;
+	sfxHandle_t reloadSoundFast;
 	sfxHandle_t reloadFastSound;
 	sfxHandle_t	reloadFullSound;
+	sfxHandle_t	reloadFullSoundFast;
 	sfxHandle_t reloadSoundAi;
 	sfxHandle_t	bounceSound;
 	sfxHandle_t spinupSound;        //----(SA)	added // sound started when fire button goes down, and stepped on when the first fire event happens
@@ -894,6 +894,12 @@ typedef struct {
 	int centerPrintY;
 	char centerPrint[1024];
 	int centerPrintLines;
+
+	int buyPrintTime;
+	int buyPrintCharWidth;
+	int buyPrintY;
+	char buyPrint[1024];
+	int buyPrintLines;
 
 	int subtitlePrintTime;
 	int subtitlePrintCharWidth;
@@ -1691,6 +1697,7 @@ extern itemInfo_t cg_items[MAX_ITEMS];
 extern markPoly_t cg_markPolys[MAX_MARK_POLYS];
 
 extern vmCvar_t cg_centertime;
+extern vmCvar_t cg_buyprinttime;
 
 extern vmCvar_t cg_bobbing;
 
@@ -1835,6 +1842,7 @@ extern vmCvar_t cg_wolfparticles;
 
 // Ridah
 extern vmCvar_t cg_gameType;
+extern vmCvar_t cg_newinventory;
 extern vmCvar_t cg_bloodTime;
 extern vmCvar_t cg_norender;
 extern vmCvar_t cg_skybox;
@@ -2015,6 +2023,7 @@ void CG_AddLagometerSnapshotInfo( snapshot_t *snap );
 void CG_CenterPrint( const char *str, int y, int charWidth );
 void CG_BonusCenterPrint( const char *str, int y, int charWidth );
 void CG_SubtitlePrint( const char *str, int y, int charWidth );
+void CG_BuyPrint( const char *str, int y, int charWidth );
 
 void CG_ObjectivePrint( const char *str, int charWidth, int team );     // NERVE - SMF
 void CG_DrawHead( float x, float y, float w, float h, int clientNum, vec3_t headAngles );
@@ -2255,8 +2264,8 @@ void CG_FlameDamage( int owner, vec3_t org, float radius );
 void    CG_InitLocalEntities( void );
 localEntity_t   *CG_AllocLocalEntity( void );
 void    CG_AddLocalEntities( void );
-//void    CG_FreeDelayedBrass( delayedBrass_t * );
-//void    CG_AllocDelayedBrass( centity_t *, int, void ( *ejectBrassFunc )( centity_t * ) );
+void    CG_FreeDelayedBrass( delayedBrass_t * );
+void    CG_AllocDelayedBrass( centity_t *, int, void ( *ejectBrassFunc )( centity_t * ) );
 
 //
 // cg_effects.c

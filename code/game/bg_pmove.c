@@ -509,6 +509,12 @@ static float PM_CmdScale( usercmd_t *cmd ) {
 		case AICHAR_HELGA:
 		     scale *= 1.3;
 			 break;
+		case AICHAR_ZOMBIE_SURV:
+		     scale *= 1.1;
+			 break;
+		case AICHAR_ZOMBIE_GHOST:
+		     scale *= 1.3;
+			 break;
 		default:
 		    scale *= 1.0;
 		}
@@ -2185,6 +2191,10 @@ PM_BeginWeaponReload
 ==============
 */
 static void PM_BeginWeaponReload( int weapon ) {
+
+	int reloadTime = ammoTable[weapon].reloadTime;
+    int reloadTimeFull = ammoTable[weapon].reloadTimeFull;
+
 	// only allow reload if the weapon isn't already occupied (firing is okay)
 	if ( pm->ps->weaponstate != WEAPON_READY && pm->ps->weaponstate != WEAPON_FIRING ) {
 		return;
@@ -2233,32 +2243,54 @@ static void PM_BeginWeaponReload( int weapon ) {
 		break;
 	}
 
-    if ( !pm->ps->aiChar) { 
-	if ( pm->ps->ammoclip[BG_FindClipForWeapon(weapon)] == 0 ) {
-		  PM_ContinueWeaponAnim( WEAP_RELOAD2 );
-	      if ( pm->ps->weaponstate == WEAPON_READY ) {
-		      pm->ps->weaponTime += ammoTable[weapon].reloadTimeFull;
-	      } else if ( pm->ps->weaponTime < ammoTable[weapon].reloadTimeFull ) {
-		      pm->ps->weaponTime += ( ammoTable[weapon].reloadTimeFull - pm->ps->weaponTime );
-	      }
-		  PM_AddEvent( EV_FILL_CLIP_FULL );
-	} else {
-	      PM_ContinueWeaponAnim( WEAP_RELOAD1 );
-	      if ( pm->ps->weaponstate == WEAPON_READY ) {
-		      pm->ps->weaponTime += ammoTable[weapon].reloadTime;
-	      } else if ( pm->ps->weaponTime < ammoTable[weapon].reloadTime ) {
-		      pm->ps->weaponTime += ( ammoTable[weapon].reloadTime - pm->ps->weaponTime );
-	      }
-		  PM_AddEvent( EV_FILL_CLIP );
+	// If PW_HASTE_SURV powerup or PERK_WEAPONHANDLING perk is active, reduce reloadTime by half
+	if (pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING])
+	{
+		reloadTime *= 0.67;
+		reloadTimeFull *= 0.67;
 	}
-	} else {
-	  PM_ContinueWeaponAnim( WEAP_RELOAD1 );
-	  	if ( pm->ps->weaponstate == WEAPON_READY ) {
-		    pm->ps->weaponTime += ammoTable[weapon].reloadTime;
-	    } else if ( pm->ps->weaponTime < ammoTable[weapon].reloadTime ) {
-		    pm->ps->weaponTime += ( ammoTable[weapon].reloadTime - pm->ps->weaponTime );
-	      }
-		 PM_AddEvent( EV_FILL_CLIP_AI );
+
+	if (!pm->ps->aiChar)
+	{
+		if (pm->ps->ammoclip[BG_FindClipForWeapon(weapon)] == 0)
+		{
+			PM_ContinueWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD2_FAST : WEAP_RELOAD2);
+			if (pm->ps->weaponstate == WEAPON_READY)
+			{
+				pm->ps->weaponTime += reloadTimeFull;
+			}
+			else if (pm->ps->weaponTime < reloadTimeFull)
+			{
+				pm->ps->weaponTime += (reloadTimeFull - pm->ps->weaponTime);
+			}
+			PM_AddEvent(EV_FILL_CLIP_FULL);
+		}
+		else
+		{
+			PM_ContinueWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD1_FAST : WEAP_RELOAD1);
+			if (pm->ps->weaponstate == WEAPON_READY)
+			{
+				pm->ps->weaponTime += reloadTime;
+			}
+			else if (pm->ps->weaponTime < reloadTime)
+			{
+				pm->ps->weaponTime += (reloadTime - pm->ps->weaponTime);
+			}
+			PM_AddEvent(EV_FILL_CLIP);
+		}
+	}
+	else
+	{
+		PM_ContinueWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD1_FAST : WEAP_RELOAD1);
+		if (pm->ps->weaponstate == WEAPON_READY)
+		{
+			pm->ps->weaponTime += reloadTime;
+		}
+		else if (pm->ps->weaponTime < reloadTime)
+		{
+			pm->ps->weaponTime += (reloadTime - pm->ps->weaponTime);
+		}
+		PM_AddEvent(EV_FILL_CLIP_AI);
 	}
 
 	pm->ps->weaponstate = WEAPON_RELOADING;
@@ -4002,11 +4034,11 @@ static void PM_Weapon( void ) {
 		}
 	}
 
-    /*
-	if ( pm->ps->powerups[PW_HASTE] ) {
-		addTime /= 1.6;
+    
+	if ( pm->ps->powerups[PW_HASTE_SURV] ) {
+		addTime /= 1.3;
 	}
-	*/
+	
 
 	// add the recoil amount to the aimSpreadScale
 //	pm->ps->aimSpreadScale += 3.0*aimSpreadScaleAdd;
@@ -4588,12 +4620,25 @@ PM_Sprint
 */
 //----(SA)	cleaned up for SP (10/22/01)
 void PM_Sprint( void ) {
+
+	int staminaDrain = 2000;
+    int staminaRecharge = 500;
+
+
+    // Check if the player has PERK_RUNNER
+    if (pm->ps->perks[PERK_RUNNER] > 0) {
+        // Decrease stamina drain and increase recharge
+        staminaDrain = 1500;
+        staminaRecharge = 1000;
+    }
+
+
 	if (    ( pm->cmd.buttons & BUTTON_SPRINT ) &&
 			( pm->cmd.forwardmove || pm->cmd.rightmove ) &&
 			!( pm->ps->pm_flags & PMF_DUCKED ) ) {
 
 		if ( pm->ps->powerups[PW_NOFATIGUE] ) {    // take time from powerup before taking it from sprintTime
-			pm->ps->powerups[PW_NOFATIGUE] -= 2000 * pml.frametime; 
+			pm->ps->powerups[PW_NOFATIGUE] -= staminaDrain * pml.frametime; 
 
 			pm->ps->sprintTime += 10;           // (SA) go ahead and continue to recharge stamina at double rate with stamina powerup even when exerting
 			if ( pm->ps->sprintTime > 20000 ) {
@@ -4606,7 +4651,7 @@ void PM_Sprint( void ) {
 		} else {
 			// RF, dont drain sprintTime if not moving
 			if ( VectorLength( pm->ps->velocity ) > 128 ) { // (SA) check for a bit more movement
-				pm->ps->sprintTime -= 2000 * pml.frametime; 
+				pm->ps->sprintTime -= staminaDrain * pml.frametime; 
 			}
 		}
 
@@ -4625,16 +4670,16 @@ void PM_Sprint( void ) {
 		// JPW NERVE adjusted for framerate independence
 
 		// regular recharge
-		pm->ps->sprintTime += 500 * pml.frametime;
+		pm->ps->sprintTime += staminaRecharge * pml.frametime;
 
 		// additional (2x) recharge if in top 75% of sprint bar, or with stamina powerup
 		if ( pm->ps->sprintTime > 5000 || pm->ps->powerups[PW_NOFATIGUE] ) {
-			pm->ps->sprintTime += 500 * pml.frametime;
+			pm->ps->sprintTime +=  staminaRecharge * pml.frametime;
 		}
 
 		// additional recharge if standing still
 		if ( !( pm->cmd.forwardmove || pm->cmd.rightmove ) ) {
-			pm->ps->sprintTime += 500 * pml.frametime;
+			pm->ps->sprintTime +=  staminaRecharge * pml.frametime;
 		}
 
 		if ( pm->ps->sprintTime > 20000 ) {
@@ -5015,7 +5060,14 @@ void PM_BeginM97Reload( void )
 		pm->ps->holdable[HI_M97] = M97_RELOADING_BEGIN_PUMP;
 
 	} else {
-		anim = WEAP_RELOAD1;
+		if (pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING])
+		{
+			anim = WEAP_RELOAD1_FAST;
+		}
+		else
+		{
+			anim = WEAP_RELOAD1;
+		}
 		pm->ps->weaponTime += ammoTable[WP_M97].shotgunReloadStart;
 		pm->ps->holdable[HI_M97] = M97_RELOADING_BEGIN;
 	}
@@ -5063,7 +5115,7 @@ void PM_M97Reload() {
 
 	// Override - but must load at least one shell!
 	if( pm->pmext->m97reloadInterrupt && pm->ps->holdable[HI_M97] != M97_RELOADING_BEGIN ) {
-		PM_StartWeaponAnim(WEAP_RELOAD3);
+        PM_StartWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD3_FAST : WEAP_RELOAD3);
 		pm->ps->weaponTime += ammoTable[WP_M97].shotgunReloadEnd;
 		pm->ps->weaponstate = WEAPON_READY;
 		return;
@@ -5072,11 +5124,11 @@ void PM_M97Reload() {
 	// If clip isn't full, load another shell
 	if( pm->ps->ammoclip[WP_M97] < ammoTable[WP_M97].maxclip && pm->ps->ammo[BG_FindAmmoForWeapon(WP_M97)] ) {
 		PM_AddEvent( EV_FILL_CLIP );
-		PM_StartWeaponAnim(WEAP_RELOAD2);
+        PM_StartWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD2_FAST : WEAP_RELOAD2);
 		pm->ps->weaponTime += ammoTable[WP_M97].shotgunReloadLoop;
 		pm->ps->holdable[HI_M97] = M97_RELOADING_LOOP;
 	} else {
-		PM_StartWeaponAnim(WEAP_RELOAD3);			// From loop to read
+        PM_StartWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD3_FAST : WEAP_RELOAD3);
 		pm->ps->weaponTime += ammoTable[WP_M97].shotgunReloadEnd;
 		pm->ps->weaponstate = WEAPON_READY;
 	}
@@ -5101,7 +5153,14 @@ void PM_BeginAuto5Reload( void )
 		pm->ps->holdable[HI_AUTO5] = AUTO5_RELOADING_BEGIN_PUMP;
 
 	} else {
-		anim = WEAP_RELOAD1;
+		if (pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING])
+		{
+			anim = WEAP_RELOAD1_FAST;
+		}
+		else
+		{
+			anim = WEAP_RELOAD1;
+		}
 		pm->ps->weaponTime += ammoTable[WP_AUTO5].shotgunReloadStart;
 		pm->ps->holdable[HI_AUTO5] = AUTO5_RELOADING_BEGIN;
 	}
@@ -5158,11 +5217,11 @@ void PM_Auto5Reload() {
 	// If clip isn't full, load another shell
 	if( pm->ps->ammoclip[WP_AUTO5] < ammoTable[WP_AUTO5].maxclip && pm->ps->ammo[BG_FindAmmoForWeapon(WP_AUTO5)] ) {
 		PM_AddEvent( EV_FILL_CLIP );
-		PM_StartWeaponAnim(WEAP_RELOAD2);
+        PM_StartWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD2_FAST : WEAP_RELOAD2);
 		pm->ps->weaponTime += ammoTable[WP_AUTO5].shotgunReloadLoop;
 		pm->ps->holdable[HI_AUTO5] = AUTO5_RELOADING_LOOP;
 	} else {
-		PM_StartWeaponAnim(WEAP_RELOAD3);			// From loop to read
+        PM_StartWeaponAnim((pm->ps->powerups[PW_HASTE_SURV] || pm->ps->perks[PERK_WEAPONHANDLING]) ? WEAP_RELOAD3_FAST : WEAP_RELOAD3);
 		pm->ps->weaponTime += ammoTable[WP_AUTO5].shotgunReloadEnd;
 		pm->ps->weaponstate = WEAPON_READY;
 	}

@@ -5588,6 +5588,29 @@ model="models/powerups/holdable/zemphr_book.md3"
 		{0,0,0,0,0}
 	},
 
+/*QUAKED item_vampire (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
+*/
+		{
+		"item_vampire",
+		"sound/Zombie/firstsight/firstsight1.wav",
+		{
+		"models/mapobjects/Skull/skul2.md3",
+		0, 
+		0
+		},
+		"",              
+		"Vampirism",       
+		30,
+		IT_POWERUP,
+		WP_NONE,
+		PW_VAMPIRE,
+		0,
+		0,
+		"",                            
+		"",   
+		{0,0,0,0,0}
+	},
+
 	/*QUAKED item_haste (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
 */
 		{
@@ -5611,6 +5634,30 @@ model="models/powerups/holdable/zemphr_book.md3"
 		{0,0,0,0,0}
 	},
 
+	/*QUAKED item_haste (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
+*/
+		{
+		"item_haste_surv",
+		"sound/pickup/q3powerups/haste.wav",
+		{
+		"models/powerups/instant/haste.md3",
+		0, 
+		0
+		},
+		"",                    
+		"Haste",     
+		30,
+		IT_POWERUP,
+		WP_NONE,
+		PW_HASTE_SURV,
+		0,
+		0,
+		"",                          
+		"",   
+		{0,0,0,0,0}
+	},
+
+
 
 		/*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
 */
@@ -5628,6 +5675,30 @@ model="models/powerups/holdable/zemphr_book.md3"
 		IT_POWERUP,
 		WP_NONE,
 		PW_BATTLESUIT,
+		0,
+		0,
+		"",                          
+		"sound/items/airout.wav sound/items/protect3.wav",   
+		{0,0,0,0,0}
+	},
+
+
+		/*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
+*/
+		{
+		"item_enviro_surv",
+		"sound/pickup/q3powerups/protect.wav",
+		{
+		"models/powerups/instant/enviro.md3",
+		0, 
+		0
+		},
+		"",                             
+		"Battle Suit",     
+		30,
+		IT_POWERUP,
+		WP_NONE,
+		PW_BATTLESUIT_SURV,
 		0,
 		0,
 		"",                          
@@ -5657,6 +5728,133 @@ model="models/powerups/holdable/zemphr_book.md3"
 		0,
 		"",                          
 		"",   
+		{0,0,0,0,0}
+	},
+
+
+/*QUAKED perk_resilience(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_bandages.wav"
+use sound : "sound/pickup/holdable/use_bandages.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/bandages.md3"
+*/
+	{
+		"perk_resilience",
+		"sound/pickup/holdable/get_bandages.wav",
+		{
+		"models/powerups/holdable/bandages.md3",
+		0, 
+		0
+		},
+
+		"icons/perk_regen",             
+		"Resilience",             
+		1,
+		IT_PERK,
+		WP_NONE,
+		PERK_RESILIENCE,
+		0,
+		0,
+		"",                             
+		"",
+		{0,0,0,0,0}
+	},
+
+/*QUAKED perk_scavenger(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_bandages.wav"
+use sound : "sound/pickup/holdable/use_bandages.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/bandages.md3"
+*/
+	{
+		"perk_scavenger",
+		"sound/pickup/holdable/get_bandages.wav",
+		{
+		"models/powerups/holdable/bandages.md3",
+		0, 
+		0
+		},
+
+		"icons/perk_scavenger",             
+		"Scavenger",             
+		1,
+		IT_PERK,
+		WP_NONE,
+		PERK_SCAVENGER,
+		0,
+		0,
+		"",                             
+		"",
+		{0,0,0,0,0}
+	},
+
+
+/*QUAKED perk_runner(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_bandages.wav"
+use sound : "sound/pickup/holdable/use_bandages.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/bandages.md3"
+*/
+	{
+		"perk_runner",
+		"sound/pickup/holdable/get_bandages.wav",
+		{
+		"models/powerups/holdable/bandages.md3",
+		0, 
+		0
+		},
+
+		"icons/perk_runner",             
+		"Runner",             
+		1,
+		IT_PERK,
+		WP_NONE,
+		PERK_RUNNER,
+		0,
+		0,
+		"",                             
+		"",
+		{0,0,0,0,0}
+	},
+
+
+/*QUAKED perk_weaponhandling(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_bandages.wav"
+use sound : "sound/pickup/holdable/use_bandages.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/bandages.md3"
+*/
+	{
+		"perk_weaponhandling",
+		"sound/pickup/holdable/get_bandages.wav",
+		{
+		"models/powerups/holdable/bandages.md3",
+		0, 
+		0
+		},
+
+		"icons/perk_weaponhandling",             
+		"Weapon Handling",             
+		1,
+		IT_PERK,
+		WP_NONE,
+		PERK_WEAPONHANDLING,
+		0,
+		0,
+		"",                             
+		"",
 		{0,0,0,0,0}
 	},
 
@@ -5762,6 +5960,23 @@ gitem_t *BG_FindItemForHoldable( holdable_t pw ) {
 	return NULL;
 }
 
+
+/*
+==============
+BG_FindItemForPerk
+==============
+*/
+gitem_t *BG_FindItemForPerk( perk_t perk ) {
+	int i;
+
+	for ( i = 0 ; i < bg_numItems ; i++ ) {
+		if ( bg_itemlist[i].giType == IT_PERK && bg_itemlist[i].giTag == perk ) {
+			return &bg_itemlist[i];
+		}
+	}
+
+	return NULL;
+}
 
 /*
 ===============
@@ -7098,6 +7313,7 @@ char *eventnames[] = {
 	"EV_VENOMFULL",
 	"EV_BULLET",             // otherEntity is the shooter
 	"EV_LOSE_HAT",
+	"EV_REATTACH_HAT",
 	"EV_GIB_HEAD",           // only blow off the head
 	"EV_PAIN",
 	"EV_CROUCH_PAIN",
@@ -7108,6 +7324,7 @@ char *eventnames[] = {
 	"EV_OBITUARY",
 	"EV_POWERUP_QUAD",
 	"EV_POWERUP_BATTLESUIT",
+	"EV_POWERUP_BATTLESUIT_SURV",
 	"EV_POWERUP_REGEN",
 	"EV_GIB_PLAYER",         // gib a previously living player
 	"EV_GIB_VAMPIRISM",

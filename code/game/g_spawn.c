@@ -186,6 +186,9 @@ field_t fields[] = {
 
 	{"stringname",       FOFS( translation ),          F_STRING},
 	{"canSpeak",         FOFS( canSpeak ),             F_INT},
+	{"price",            FOFS( price ),                F_INT},
+	{"buy_item",         FOFS( buy_item ),           F_STRING},
+	{"isWeapon",         FOFS( isWeapon ),             F_INT},
 	{NULL}
 };
 
@@ -310,6 +313,8 @@ void SP_props_box_64( gentity_t *self );
 void SP_ai_soldier( gentity_t *ent );
 void SP_ai_american( gentity_t *ent );
 void SP_ai_zombie( gentity_t *ent );
+void SP_ai_zombie_surv( gentity_t *ent );
+void SP_ai_zombie_ghost( gentity_t *ent );
 void SP_ai_warzombie( gentity_t *ent );
 void SP_ai_marker( gentity_t *ent );
 void SP_ai_effect( gentity_t *ent );
@@ -429,6 +434,8 @@ void SP_misc_tagemitter( gentity_t *ent );   //----(SA)	added
 void SP_trigger_deathCheck( gentity_t *ent );
 void SP_misc_spawner( gentity_t *ent );
 void SP_props_decor_Scale( gentity_t *ent );
+
+void SP_target_buy( gentity_t *ent );
 
 spawn_t spawns[] = {
 	// info entities don't do anything at all, but provide positional
@@ -586,6 +593,8 @@ spawn_t spawns[] = {
 	{"ai_soldier", SP_ai_soldier},
 	{"ai_american", SP_ai_american},
 	{"ai_zombie", SP_ai_zombie},
+	{"ai_zombie_surv", SP_ai_zombie_surv},
+	{"ai_zombie_ghost", SP_ai_zombie_ghost},
 	{"ai_warzombie", SP_ai_warzombie},
 	{"ai_venom", SP_ai_venom},
 	{"ai_loper", SP_ai_loper},
@@ -698,6 +707,8 @@ spawn_t spawns[] = {
 	{"script_model_med", SP_script_model_med},
 	{"script_mover", SP_script_mover},
 	{"script_multiplayer", SP_script_multiplayer},           // DHM - Nerve
+
+	{"target_buy", SP_target_buy},
 
 	{NULL, 0}
 };
