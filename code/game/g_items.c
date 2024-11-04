@@ -62,6 +62,10 @@ If you have questions concerning this license or the applicable additional terms
 
 //======================================================================
 
+weapon_t GetComplexWeapon( weapon_t weapon );
+weapon_t GetSimpleWeapon( weapon_t weapon );
+qboolean IsWeaponComplex( weapon_t weapon );
+
 
 void *remove_powerup_after_delay(void *arg) {
     gentity_t *other = (gentity_t *)arg;
@@ -114,6 +118,11 @@ int Pickup_Powerup( gentity_t *ent, gentity_t *other ) {
 			other->client->ps.powerups[PW_NOFATIGUE] = 60000;
 		}
 	}
+
+    if (ent->item->giTag == PW_AMMO) {
+         Add_Ammo( other, other->client->ps.weapon, ammoTable[other->client->ps.weapon].maxammo, qtrue );
+    }
+
    
 
     // DIRTY HACK!!!!! If the invisibility powerup is picked up, set FL_NOTARGET and start a timer to remove it
@@ -692,7 +701,13 @@ int G_GetFreeWeaponSlot( gentity_t *other ) {
 }
 
 int GetCurrentSlotId( gentity_t *other ) {
-	return G_FindWeaponSlot( other, other->client->ps.weapon );
+	int idx = G_FindWeaponSlot( other, other->client->ps.weapon );
+
+	if ( idx < 0 ) {
+		return G_FindWeaponSlot( other, GetComplexWeapon( other->client->ps.weapon ) );
+	}
+
+	return idx;
 }
 
 qboolean IsThereEmptySlot( gentity_t *other ) {
@@ -738,6 +753,9 @@ weapon_t GetSimpleWeapon( weapon_t weapon ) {
 qboolean IsWeaponComplex( weapon_t weapon ) {
 	switch ( weapon )
 	{
+	case WP_AKIMBO:
+	case WP_DUAL_TT33:
+	
 	case WP_LUGER:
 	case WP_GARAND:
 	case WP_FG42:
@@ -762,6 +780,10 @@ qboolean IsUpgradingWeapon( gentity_t *other, weapon_t weapon ) {
 	weapon_t simpleWeapon = GetSimpleWeapon( weapon );
 	weapon_t complexWeapon = GetComplexWeapon( weapon );
 	int simpleWeaponSlotId = G_FindWeaponSlot( other, simpleWeapon );
+
+	if ( simpleWeaponSlotId < 0 ) {
+		return qfalse;
+	}
 
 	return simpleWeaponSlotId > 0 && other->client->ps.weaponSlots[ simpleWeaponSlotId ] == simpleWeapon && weapon == complexWeapon;
 }
@@ -856,15 +878,13 @@ void G_DropWeapon( gentity_t *ent, weapon_t weapon ) {
 	if ( weapon == client->ps.weapon ) {
 		client->ps.weapon = 0;
 	}
-
-	// now pickup the other one
-	client->dropWeaponTime = level.time;
 }
 
 //======================================================================
 
 int Pickup_Weapon_New_Inventory( gentity_t *ent, gentity_t *other ) {
 	int quantity;
+	qboolean isPickedUp = qfalse;
 	qboolean alreadyHave = qfalse;
 	weapon_t weapon = ent->item->giTag;
 
@@ -921,7 +941,7 @@ int Pickup_Weapon_New_Inventory( gentity_t *ent, gentity_t *other ) {
 
 	if ( weapon == WP_KNIFE ) {
 		if ( other->client->ps.ammoclip[ weapon ] < ammoTable[ WP_KNIFE ].maxammo ) {
-			Add_Ammo( other, weapon, quantity, qfalse );
+			Add_Ammo( other, weapon, 1, qfalse );
 		}
 
 		if ( !( ent->spawnflags & 8 ) ) {
@@ -935,6 +955,8 @@ int Pickup_Weapon_New_Inventory( gentity_t *ent, gentity_t *other ) {
 		ent->active = qtrue;
 		return 0;
 	}
+
+	alreadyHave = COM_BitCheck( other->client->ps.weapons, weapon );
 
 	if ( !COM_BitCheck( other->client->ps.weapons, weapon ) ) {
 		if ( IsThereEmptySlot( other ) || IsUpgradingWeapon( other, weapon ) || other->client->latched_buttons & BUTTON_ACTIVATE ) {
@@ -969,21 +991,28 @@ int Pickup_Weapon_New_Inventory( gentity_t *ent, gentity_t *other ) {
 					weapon_t altWeapon = GetWeaponTableData( weapon )->weapAlts;
 					COM_BitSet( other->client->ps.weapons, weapon );
 					COM_BitSet( other->client->ps.weapons, altWeapon );
-					other->client->ps.weaponSlots[ slotId ] = GetComplexWeapon( weapon );
+					other->client->ps.weaponSlots[ slotId ] = weapon;
 
 				} else {
 					COM_BitSet( other->client->ps.weapons, weapon );
 					other->client->ps.weaponSlots[ slotId ] = weapon;
 				}
 			}
+
+			isPickedUp = qtrue;
 		}
 	}
 
 	if ( NeedAmmo( other, weapon ) ) {
 		Add_Ammo( other, weapon, quantity, !alreadyHave );
-	} else {
+	} else if ( !isPickedUp ) {
 		ent->active = qtrue;
 		return 0;
+	}
+
+	if ( isPickedUp ) {
+		// now pickup the other one
+		other->client->dropWeaponTime = level.time;
 	}
 
 	if ( !( ent->spawnflags & 8 ) ) {
@@ -1374,7 +1403,16 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity ) {
 	dropped->touch = Touch_Item_Auto;
 
 	G_SetOrigin( dropped, origin );
-	dropped->s.pos.trType = TR_GRAVITY;
+
+	if (item->giType == IT_POWERUP)
+	{
+		dropped->s.pos.trType = TR_GRAVITY_PAUSED;
+	}
+	else
+	{
+		dropped->s.pos.trType = TR_GRAVITY;
+	}
+
 	dropped->s.pos.trTime = level.time;
 	VectorCopy( velocity, dropped->s.pos.trDelta );
 
@@ -1388,10 +1426,10 @@ gentity_t *LaunchItem( gitem_t *item, vec3_t origin, vec3_t velocity ) {
 	{
 		dropped->s.eFlags |= EF_SPINNING; // spin the weapon as it flies from the dead player.  it will stop when it hits the ground
 		// Add dynamic light to the dropped powerup
-		dropped->s.constantLight = 150;			 // RGB intensity
-		dropped->s.constantLight |= (255 << 8);	 // R
-		dropped->s.constantLight |= (223 << 16); // G
-		dropped->s.constantLight |= (0 << 24);	 // B
+		//dropped->s.constantLight = 50;	
+		//dropped->s.constantLight |= (255 << 8);	 
+		//dropped->s.constantLight |= (255 << 16); 
+		//dropped->s.constantLight |= (255 << 24);	
 
 		// Play a sound at the location of the dropped item
 		dropped->s.loopSound = G_SoundIndex("sound/misc/powerup_ambience.wav");

@@ -35,6 +35,9 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "g_local.h"
 
+#include <pthread.h>
+#include <unistd.h>
+
 extern vec3_t muzzleTrace; // used by falloff mechanic
 
 /*
@@ -206,38 +209,40 @@ void TossClientPowerups(gentity_t *self, gentity_t *attacker)
 	gentity_t *drop = 0;
 	int powerup = 0;
 
+	if (!attacker->client)
+	{
+		return;
+	}
+
 	AngleVectors(self->r.currentAngles, forward, NULL, NULL);
 
 
 		angle = 45;
 
 		// Drop random powerup in survival mode
-		int dropChance = 10; // Base drop chance
+		int dropChance = 5; // Base drop chance
 
 		// Increase drop chance if attacker has PERK_SCAVENGER
 		if (attacker->client->ps.perks[PERK_SCAVENGER] > 0)
 		{
-			dropChance += 7;
+			dropChance += 5;
 		}
 
 		if (rand() % 100 < dropChance)
 		{
-			switch (rand() % 5)
+			switch (rand() % 4)
 			{ // Random number
 			case 0:
-				powerup = PW_HASTE_SURV;
-				break;
-			case 1:
 				powerup = PW_QUAD;
 				break;
-			case 2:
-				powerup = PW_INVIS;
-				break;
-			case 3:
+			case 1:
 				powerup = PW_BATTLESUIT_SURV;
 				break;
-			case 4:
+			case 2:
 				powerup = PW_VAMPIRE;
+				break;
+			case 3:
+				powerup = PW_AMMO;
 				break;
 			}
 			item = BG_FindItemForPowerup(powerup);
@@ -415,6 +420,56 @@ char    *modNames[] = {
 	"MOD_BAT"
 };
 
+
+void *remove_powerup_after_delay2(void *arg) {
+    gentity_t *other = (gentity_t *)arg;
+
+    // Sleep for 30 seconds
+    sleep(30);
+
+    // Remove the FL_NOTARGET flag
+    other->flags &= ~FL_NOTARGET;
+
+    return NULL;
+}
+
+
+/*
+==================
+player_die_secondchance
+==================
+*/
+void player_die_secondchance( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath ) {
+
+
+	if ( self->client->ps.pm_type == PM_DEAD ) {
+		return;
+	}
+
+	if ( level.intermissiontime ) {
+		return;
+	}
+
+	// Grant the player 200 health points
+    self->health = 200;
+
+	 // Grant the player invisibility powerup for a limited time (e.g., 30 seconds)
+    self->client->ps.powerups[PW_INVIS] = level.time + 30000;
+    G_AddPredictableEvent( self, EV_ITEM_PICKUP, BG_FindItemForClassName( "item_invis" ) - bg_itemlist );
+	self->flags |= FL_NOTARGET;
+    pthread_t thread_id;
+    pthread_create(&thread_id, NULL, remove_powerup_after_delay2, (void *)self);
+
+	// Remove all current perks from the player
+    memset(self->client->ps.perks, 0, sizeof(self->client->ps.perks));
+	self->client->ps.stats[STAT_PERK] = 0; // Clear all perk bits
+
+	 // Reset the player's state to prevent immediate death again
+    self->client->ps.pm_type = PM_NORMAL;
+    self->client->ps.stats[STAT_HEALTH] = self->health;
+
+}
+
 /*
 ==================
 player_die
@@ -428,6 +483,13 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 	int i;
 	char        *killerName, *obit;
 	qboolean nogib = qtrue;
+
+
+	// Check if the player has the PERK_SECONDCHANCE perk
+    if (self->client->ps.perks[PERK_SECONDCHANCE]) {
+        player_die_secondchance(self, inflictor, attacker, damage, meansOfDeath);
+        return;
+    }
 
 	if ( self->client->ps.pm_type == PM_DEAD ) {
 		return;
@@ -544,16 +606,33 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 
 	// don't allow respawn until the death anim is done
 	// g_forcerespawn may force spawning at some later time
-	self->client->respawnTime = level.time + 1700;
+	if (g_gametype.integer == GT_SURVIVAL)
+	{
+		self->client->respawnTime = level.time + 7000; // 10 seconds
+
+		// Fetch the number of waves and enemies killed
+		int numberOfWaves = waveCount;
+		int numberOfEnemiesKilled = survivalKillCount;
+
+		// Format the message
+		const char *messageTemplate = "Game Over \n You reached level %d and killed %d enemies";
+		char message[256];
+		snprintf(message, sizeof(message), messageTemplate, numberOfWaves, numberOfEnemiesKilled);
+
+		// Send the message to the server
+        trap_SendServerCommand(self - g_entities, va("egp \"%s\"", message));
+		trap_SendServerCommand(-1, "mu_play sound/music/l_finale.wav 0\n");
+	}
+	else
+	{
+		self->client->respawnTime = level.time + 1700;
+		trap_SendServerCommand(-1, "mu_play sound/music/l_failed_1.wav 0\n");
+		trap_SetConfigstring(CS_MUSIC_QUEUE, ""); // clear queue so it'll be quiet after hit
+		trap_SendServerCommand(-1, "cp missionfail0");
+	}
 
 	// remove powerups
-	memset( self->client->ps.powerups, 0, sizeof( self->client->ps.powerups ) );
-
-	trap_SendServerCommand( -1, "mu_play sound/music/l_failed_1.wav 0\n" );
-	trap_SetConfigstring( CS_MUSIC_QUEUE, "" );  // clear queue so it'll be quiet after hit
-	trap_SendServerCommand( -1, "cp missionfail0" );
-
-
+	memset(self->client->ps.powerups, 0, sizeof(self->client->ps.powerups));
 
 	// never gib in a nodrop
 	contents = trap_PointContents( self->r.currentOrigin, -1 );

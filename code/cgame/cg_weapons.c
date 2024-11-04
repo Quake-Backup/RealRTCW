@@ -5554,7 +5554,6 @@ void CG_FireWeapon( centity_t *cent, int event ) {
 		return;
 	}
 
-
 	// do brass ejection with special delays for some weapons
 	if ( weap->ejectBrassFunc && cg_brassTime.integer > 0 ) {
 		   if (cg.predictedPlayerState.ammoclip[cent->currentState.weapon] == 0) {

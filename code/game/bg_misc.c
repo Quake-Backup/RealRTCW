@@ -5569,14 +5569,14 @@ model="models/powerups/holdable/zemphr_book.md3"
 */
 		{
 		"item_quad",
-		"sound/pickup/q3powerups/quaddamage.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
-		"models/powerups/instant/quad.md3",
+		"models/powerups/survival/thule_b.md3",
 		0, 
 		0
 		},
 		"",              
-		"Quad Damage",       
+		"Veil Empower",       
 		30,
 		IT_POWERUP,
 		WP_NONE,
@@ -5592,14 +5592,14 @@ model="models/powerups/holdable/zemphr_book.md3"
 */
 		{
 		"item_vampire",
-		"sound/Zombie/firstsight/firstsight1.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
-		"models/mapobjects/Skull/skul2.md3",
+		"models/powerups/survival/thule_r.md3",
 		0, 
 		0
 		},
 		"",              
-		"Vampirism",       
+		"Veil Essence Reaver",       
 		30,
 		IT_POWERUP,
 		WP_NONE,
@@ -5611,11 +5611,34 @@ model="models/powerups/holdable/zemphr_book.md3"
 		{0,0,0,0,0}
 	},
 
+/*QUAKED item_ammopw (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
+*/
+		{
+		"item_ammopw",
+		"sound/misc/powerup_pickup.wav",
+		{
+		"models/powerups/survival/thule_gr.md3",
+		0, 
+		0
+		},
+		"",              
+		"Veil Ressuply",       
+		1,
+		IT_POWERUP,
+		WP_NONE,
+		PW_AMMO,
+		0,
+		0,
+		"",                            
+		"",   
+		{0,0,0,0,0}
+	},
+
 	/*QUAKED item_haste (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
 */
 		{
 		"item_haste",
-		"sound/pickup/q3powerups/haste.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
 		"models/powerups/instant/haste.md3",
 		0, 
@@ -5638,7 +5661,7 @@ model="models/powerups/holdable/zemphr_book.md3"
 */
 		{
 		"item_haste_surv",
-		"sound/pickup/q3powerups/haste.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
 		"models/powerups/instant/haste.md3",
 		0, 
@@ -5663,7 +5686,7 @@ model="models/powerups/holdable/zemphr_book.md3"
 */
 		{
 		"item_enviro",
-		"sound/pickup/q3powerups/protect.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
 		"models/powerups/instant/enviro.md3",
 		0, 
@@ -5687,14 +5710,14 @@ model="models/powerups/holdable/zemphr_book.md3"
 */
 		{
 		"item_enviro_surv",
-		"sound/pickup/q3powerups/protect.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
-		"models/powerups/instant/enviro.md3",
+		"models/powerups/survival/thule_g.md3",
 		0, 
 		0
 		},
 		"",                             
-		"Battle Suit",     
+		"Veil Shield",     
 		30,
 		IT_POWERUP,
 		WP_NONE,
@@ -5712,7 +5735,7 @@ model="models/powerups/holdable/zemphr_book.md3"
 */
 		{
 		"item_invis",
-		"sound/pickup/q3powerups/invisibility.wav",
+		"sound/misc/powerup_pickup.wav",
 		{
 		"models/powerups/instant/invis.md3",
 		0, 
@@ -5851,6 +5874,70 @@ model="models/powerups/holdable/bandages.md3"
 		IT_PERK,
 		WP_NONE,
 		PERK_WEAPONHANDLING,
+		0,
+		0,
+		"",                             
+		"",
+		{0,0,0,0,0}
+	},
+
+
+/*QUAKED perk_rifling(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_bandages.wav"
+use sound : "sound/pickup/holdable/use_bandages.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/bandages.md3"
+*/
+	{
+		"perk_rifling",
+		"sound/pickup/holdable/get_bandages.wav",
+		{
+		"models/powerups/holdable/bandages.md3",
+		0, 
+		0
+		},
+
+		"icons/perk_rifling",             
+		"Advanced Rifling",             
+		1,
+		IT_PERK,
+		WP_NONE,
+		PERK_RIFLING,
+		0,
+		0,
+		"",                             
+		"",
+		{0,0,0,0,0}
+	},
+
+
+/*QUAKED perk_secondchance(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_bandages.wav"
+use sound : "sound/pickup/holdable/use_bandages.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/bandages.md3"
+*/
+	{
+		"perk_secondchance",
+		"sound/pickup/holdable/get_bandages.wav",
+		{
+		"models/powerups/holdable/bandages.md3",
+		0, 
+		0
+		},
+
+		"icons/perk_secondchance",             
+		"Second Chance",             
+		1,
+		IT_PERK,
+		WP_NONE,
+		PERK_SECONDCHANCE,
 		0,
 		0,
 		"",                             

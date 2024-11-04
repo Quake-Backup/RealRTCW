@@ -84,6 +84,25 @@ void Use_Target_buy( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
     price = ent->price;
     itemName = ent->buy_item;
 
+	// Define the list of random box weapons
+    char *random_box_weapons[] = {"weapon_luger", "weapon_silencer", "weapon_akimbo", 
+	"weapon_revolver", "weapon_colt", "weapon_tt33", "weapon_dualtt33", "weapon_sniperScope", 
+	"weapon_snooperrifle", "weapon_bar", "weapon_venom", "weapon_mg42m", "weapon_browning", 
+	"weapon_flamethrower", "weapon_mauserrifle", "weapon_mosin", "weapon_m1garand", 
+	"weapon_mp44", "weapon_fg42", "weapon_g43", "weapon_mp40", "weapon_mp34", 
+	"weapon_sten", "weapon_ppsh", "weapon_thompson", "weapon_panzerfaust", "weapon_tesla"}; 
+
+	// Define the list of random box weapons
+    char *random_box_weapons_dlc[] = {"weapon_luger", "weapon_silencer", "weapon_akimbo", 
+	"weapon_revolver", "weapon_colt", "weapon_tt33", "weapon_dualtt33", 
+	"weapon_snooperrifle", "weapon_bar", "weapon_venom", "weapon_mg42m", "weapon_browning", 
+	"weapon_flamethrower", "weapon_mauserrifle", "weapon_mosin", "weapon_m1garand", 
+	"weapon_mp44", "weapon_fg42", "weapon_g43", "weapon_mp40", "weapon_mp34", 
+	"weapon_sten", "weapon_ppsh", "weapon_thompson", "weapon_panzerfaust", "weapon_tesla",
+	"weapon_hdm", "weapon_m1941", "weapon_auto5", "weapon_delisle"}; 
+
+    char *random_perks[] = {"perk_resilience", "perk_scavenger", "perk_runner", "perk_weaponhandling", "perk_rifling", "perk_secondchance"}; 
+
 	int slotId = G_GetFreeWeaponSlot( activator );
 
 	if ( slotId <= 0 ) {
@@ -102,7 +121,40 @@ void Use_Target_buy( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
         return;
     }
 
-    // Find the item
+	if (strcmp(itemName, "random_weapon") == 0)
+	{
+		char **selected_weapons;
+		int numWeapons;
+
+		if (g_dlc1.integer == 1)
+		{
+			selected_weapons = random_box_weapons_dlc;
+			numWeapons = sizeof(random_box_weapons_dlc) / sizeof(random_box_weapons_dlc[0]);
+		}
+		else
+		{
+			selected_weapons = random_box_weapons;
+			numWeapons = sizeof(random_box_weapons) / sizeof(random_box_weapons[0]);
+		}
+
+		int randomIndex = rand() % numWeapons;	  // Generate a random index
+		itemName = selected_weapons[randomIndex]; // Select a random weapon
+	}
+
+if (strcmp(itemName, "random_perk") == 0)
+    {
+        char **selected_perks;
+        int numPerks;
+
+        selected_perks = random_perks;
+        numPerks = sizeof(random_perks) / sizeof(random_perks[0]);
+        
+
+        int randomIndex = rand() % numPerks;	  // Generate a random index
+        itemName = selected_perks[randomIndex]; // Select a random perk
+    }
+
+	// Find the item
     itemIndex = 0;
     for ( i = 1; bg_itemlist[i].classname; i++ ) {
         if ( !Q_strcasecmp( itemName, bg_itemlist[i].classname ) ) {
@@ -150,6 +202,8 @@ void Use_Target_buy( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
         // Select the bought weapon
         G_AddPredictableEvent( activator, EV_ITEM_PICKUP, BG_FindItemForWeapon( item->giTag ) - bg_itemlist );
 
+		trap_SendServerCommand( -1, "mu_play sound/misc/buy.wav 0\n" );
+
 	// all grenades should be IT_AMMO
     } else if ( item->giType == IT_AMMO ) {
 		// Check if player's ammo is already full
@@ -169,6 +223,7 @@ void Use_Target_buy( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
 
         // Select the bought weapon
         G_AddPredictableEvent( activator, EV_ITEM_PICKUP, BG_FindItemForWeapon( item->giTag ) - bg_itemlist );
+		trap_SendServerCommand( -1, "mu_play sound/misc/buy.wav 0\n" );
 
     } else if ( item->giType == IT_ARMOR )  {
        if (activator->client->ps.stats[STAT_ARMOR] >= 100) {
@@ -177,6 +232,7 @@ void Use_Target_buy( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
        }
 		activator->client->ps.stats[STAT_ARMOR] = 100;
         G_AddPredictableEvent( activator, EV_ITEM_PICKUP, item - bg_itemlist );
+		trap_SendServerCommand( -1, "mu_play sound/misc/buy.wav 0\n" );
     } else if ( item->giType == IT_PERK ) {
 
 		int i, perkCount = 0;
@@ -206,13 +262,13 @@ void Use_Target_buy( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
 	   activator->client->ps.perks[item->giTag] += 1;
 	   activator->client->ps.stats[STAT_PERK] |= ( 1 << item->giTag );
        G_AddPredictableEvent( activator, EV_ITEM_PICKUP, item - bg_itemlist );
+	   	trap_SendServerCommand( -1, "mu_play sound/misc/buy_perk.wav 0\n" );
 	} else {
 		return;
 	}
 
 	// Subtract price from player's score
     activator->client->ps.persistant[PERS_SCORE] -= price;
-	trap_SendServerCommand( -1, "mu_play sound/misc/buy.wav 0\n" );
 }
 
 void SP_target_buy( gentity_t *ent ) {

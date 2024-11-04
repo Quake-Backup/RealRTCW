@@ -33,6 +33,8 @@ If you have questions concerning this license or the applicable additional terms
  *
 */
 
+#include <stdlib.h> // For rand()
+#include <stdio.h>  // For snprintf()
 
 #include "g_local.h"
 #include "../qcommon/q_shared.h"
@@ -81,6 +83,36 @@ static bot_moveresult_t *moveresult;
 int activeAI[NUM_CHARACTERS];
 int survivalKillCount;
 int maxActiveAI[NUM_CHARACTERS];
+int waveCount = 0;
+int waveKillCount = 0;
+int killCountRequirement = 0;
+
+int maxSoldiers = 10;
+int maxEliteGuards = 4;
+int maxBlackGuards = 4;
+int maxVenoms = 2;
+
+int maxZombies = 15;
+int maxWarrirors = 5;
+int maxGhosts = 3;
+
+int waveEg = 3;
+int waveBg = 6;
+int waveV = 10;
+
+int waveWarz = 3;
+int waveGhosts = 6;
+
+int zombieHealthCap = 300;
+int warriorHealthCap = 350;
+int ghostHealthCap = 300;
+int priestHealthCap = 500;
+
+int soldierHealthCap = 100;	
+int eliteGuardHealthCap = 150;
+int blackGuardHealthCap = 200;
+int venomHealthCap = 300;
+
 
 
 /*
@@ -354,66 +386,81 @@ float AICast_SpeedScaleForDistance( cast_state_t *cs, float startdist, float ide
 	}
 }
 
-void AICast_IncreaseMaxActiveAI() {
+void AICast_CheckSurvivalProgression( gentity_t *attacker ) {
 
-    // Increase maxActiveAI for AICHAR_SOLDIER based on survivalKillCount
-    if (survivalKillCount % 10 == 0) {
-        maxActiveAI[AICHAR_SOLDIER] += 1;
+    // Wave Change Event
+    if (survivalKillCount == killCountRequirement) {
+        waveCount++;
+        killCountRequirement += waveKillCount + rand() % 5;  
+		attacker->client->ps.persistant[PERS_WAVES]++;
+		waveKillCount = 0;
+
+		int randomIndex = rand() % 19 + 1;
+		static char command[256];
+		snprintf(command, sizeof(command), "mu_play sound/announcer/hein%d.wav 0\n", randomIndex);
+		trap_SendServerCommand(-1, command);
+
+   // Normal soldiers
+    maxActiveAI[AICHAR_SOLDIER] += 1;
+    if (maxActiveAI[AICHAR_SOLDIER] > maxSoldiers) {
+        maxActiveAI[AICHAR_SOLDIER] = maxSoldiers;
     }
 
-    // Clamp maxActiveAI for AICHAR_SOLDIER to a maximum value
-    if (maxActiveAI[AICHAR_SOLDIER] > 10) {
-        maxActiveAI[AICHAR_SOLDIER] = 10;
+	// Elite Guards
+	if (waveCount >= waveEg)
+	{
+		maxActiveAI[AICHAR_ELITEGUARD] += 1;
+		if (maxActiveAI[AICHAR_ELITEGUARD] >  maxEliteGuards) {
+			maxActiveAI[AICHAR_ELITEGUARD] =  maxEliteGuards;
+		}
+	}
+
+	// Black Guards
+	if (waveCount >= waveBg)
+	{
+		maxActiveAI[AICHAR_BLACKGUARD] += 1;
+		if (maxActiveAI[AICHAR_BLACKGUARD] >  maxBlackGuards) {
+			maxActiveAI[AICHAR_BLACKGUARD] =  maxBlackGuards;
+		}
+	}
+
+    // Venoms
+	if (waveCount >= waveV)
+	{
+		maxActiveAI[AICHAR_VENOM] += 1;
+		if (maxActiveAI[AICHAR_VENOM] > maxVenoms){
+			maxActiveAI[AICHAR_VENOM] = maxVenoms;
+		}
+	}
+
+	// Default Zombies
+	maxActiveAI[AICHAR_ZOMBIE_SURV] += 1;
+    if (maxActiveAI[AICHAR_ZOMBIE_SURV] > maxZombies) {
+        maxActiveAI[AICHAR_ZOMBIE_SURV] = maxZombies;
     }
 
-    if (survivalKillCount % 10 == 0) {
-        maxActiveAI[AICHAR_ZOMBIE_SURV] += 1;
+	// Warrirors
+	if (waveCount >= waveWarz)
+	{
+		maxActiveAI[AICHAR_WARZOMBIE] += 1;
+		if (maxActiveAI[AICHAR_WARZOMBIE] > maxWarrirors) {
+			maxActiveAI[AICHAR_WARZOMBIE] = maxWarrirors;
+		}
+	}
+
+	// Ghost Zombies
+	if (waveCount >= waveGhosts)
+	{
+		maxActiveAI[AICHAR_ZOMBIE_GHOST] += 1;
+		if (maxActiveAI[AICHAR_ZOMBIE_GHOST] > maxGhosts) {
+			maxActiveAI[AICHAR_ZOMBIE_GHOST] = maxGhosts;
+		}
+	}
+
     }
 
-    if (maxActiveAI[AICHAR_ZOMBIE_SURV] > 15) {
-        maxActiveAI[AICHAR_ZOMBIE_SURV] = 15;
-    }
-
-    if (survivalKillCount % 20 == 0) {
-        maxActiveAI[AICHAR_ELITEGUARD] += 2;
-    }
-
-    if (maxActiveAI[AICHAR_ELITEGUARD] > 4) {
-        maxActiveAI[AICHAR_ELITEGUARD] = 4;
-    }
-
-    if (survivalKillCount % 20 == 0) {
-        maxActiveAI[AICHAR_WARZOMBIE] += 2;
-    }
-
-    if (maxActiveAI[AICHAR_WARZOMBIE] > 5) {
-        maxActiveAI[AICHAR_WARZOMBIE] = 5;
-    }
-
-    if (survivalKillCount % 30 == 0) {
-        maxActiveAI[AICHAR_BLACKGUARD] += 2;
-    }
-
-    if (maxActiveAI[AICHAR_BLACKGUARD] > 4) {
-        maxActiveAI[AICHAR_BLACKGUARD] = 4;
-    }
-
-	if (survivalKillCount % 30 == 0) {
-        maxActiveAI[AICHAR_ZOMBIE_GHOST] += 1;
-    }
-
-    if (maxActiveAI[AICHAR_ZOMBIE_GHOST] > 3) {
-        maxActiveAI[AICHAR_ZOMBIE_GHOST] = 3;
-    }
-
-    if (survivalKillCount % 40 == 0) {
-        maxActiveAI[AICHAR_VENOM] += 2;
-    }
-
-    if (maxActiveAI[AICHAR_VENOM] > 4) {
-        maxActiveAI[AICHAR_VENOM] = 2;
-    }
 }
+
 
 /*
 ============
@@ -471,7 +518,7 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 				}
 			}
 
-			
+
 			if ( numTouch == 0 ) {    // ok to spawn
 
 				// give them health when they start reviving, so we won't gib after
@@ -479,8 +526,8 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 				
 
 
-			int health_increase = survivalKillCount / 2;
-			float speed_increase = survivalKillCount / 50;
+			int health_increase = waveCount;
+			float speed_increase = waveCount / 20;
 		    float crouchSpeedScale = 1;
 			float runSpeedScale = 1;
 			float sprintSpeedScale = 1;
@@ -491,13 +538,13 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 			{
 			case AICHAR_SOLDIER:
 				newHealth = 30 + health_increase;
-				if (newHealth > 60) {
-					newHealth = 60;
+				if (newHealth > soldierHealthCap) {
+					newHealth = soldierHealthCap;
 				}
 			case AICHAR_ZOMBIE_SURV:
 				newHealth = 40 + health_increase;
-				if (newHealth > 300) {
-					newHealth = 300;
+				if (newHealth > zombieHealthCap) {
+					newHealth = zombieHealthCap;
 				}
 				runSpeedScale = 0.8 + speed_increase;
 				if (runSpeedScale > 1.2) {
@@ -514,8 +561,8 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 				break;
 			case AICHAR_ZOMBIE_GHOST:
 				newHealth = 40 + health_increase;
-				if (newHealth > 300) {
-					newHealth = 300;
+				if (newHealth > ghostHealthCap) {
+					newHealth = ghostHealthCap;
 				}
 				runSpeedScale = 0.8 + speed_increase;
 				if (runSpeedScale > 1.6) {
@@ -532,8 +579,8 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 				break;
 			case AICHAR_WARZOMBIE:
 				newHealth = 60 + health_increase;
-				if (newHealth > 350) {
-					newHealth = 350;
+				if (newHealth > warriorHealthCap) {
+					newHealth = warriorHealthCap;
 				}
 				runSpeedScale = 0.8 + speed_increase;
 				if (runSpeedScale > 1.6) {
@@ -568,20 +615,20 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 				break;
 			case AICHAR_ELITEGUARD:
 				newHealth = 35 + health_increase;
-				if (newHealth > 80) {
-					newHealth = 80;
+				if (newHealth > eliteGuardHealthCap) {
+					newHealth = eliteGuardHealthCap;
 				}
 				break;
 			case AICHAR_BLACKGUARD:
 			    newHealth = 50 + health_increase;
-				if (newHealth > 100) {
-					newHealth = 100;
+				if (newHealth > blackGuardHealthCap) {
+					newHealth = blackGuardHealthCap;
 				}
 				break;
 			case AICHAR_VENOM:
 			    newHealth = 80 + health_increase;
-				if (newHealth > 160) {
-					newHealth = 160;
+				if (newHealth > venomHealthCap) {
+					newHealth = venomHealthCap;
 				}
 				break;
 			default:
