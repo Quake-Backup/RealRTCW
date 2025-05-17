@@ -653,8 +653,6 @@ void    AICast_DebugFrame( cast_state_t *cs );
 //
 // ai_cast_funcs.c
 void AICast_SpecialFunc( cast_state_t *cs );
-void AICast_SurvivalRespawn (gentity_t *ent, cast_state_t * cs ) ;
-void AICast_CheckSurvivalProgression( gentity_t *attacker );
 bot_moveresult_t *AICast_MoveToPos( cast_state_t *cs, vec3_t pos, int entnum );
 float   AICast_SpeedScaleForDistance( cast_state_t *cs, float startdist, float idealDist );
 char    *AIFunc_DefaultStart( cast_state_t *cs );
@@ -738,6 +736,17 @@ void    AICast_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, 
 void    AICast_Sight( gentity_t *ent, gentity_t *other, int lastSight );
 void    AICast_EndChase( cast_state_t *cs );
 void    AICast_ProcessActivate( int entNum, int activatorNum );
+
+//
+// ai_cast_survival.c
+void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath );
+void AICast_InitSurvival(void);
+void AICast_SurvivalRespawn (gentity_t *ent, cast_state_t * cs ) ;
+void AICast_CheckSurvivalProgression( gentity_t *attacker );
+void AIChar_AIScript_AlertEntity_Survival(gentity_t *ent);
+void AICast_CreateCharacter_Survival(gentity_t *newent, cast_state_t *cs);
+void AICast_UpdateMaxActiveAI( void );
+void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs);
 //
 // ai_cast_think.c
 void AICast_Think( int client, float thinktime );

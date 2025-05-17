@@ -723,7 +723,7 @@ static void CG_DrawStatusBar( void ) {
 		inclip = ps->ammoclip[BG_FindClipForWeapon( cent->currentState.weapon )];
 
 		if ( value > -1 ) {
-			if ( cg.predictedPlayerState.weapon == WP_KNIFE || cg.predictedPlayerState.weapon == WP_DAGGER ) {
+			if ( cg.predictedPlayerState.weapon == WP_KNIFE ) {
 				color = 3; 
 			} else if ( ( cg.predictedPlayerState.weaponstate == WEAPON_FIRING || cg.predictedPlayerState.weaponstate == WEAPON_FIRINGALT )
 					&& cg.predictedPlayerState.weaponTime > 100 ) {
@@ -787,8 +787,7 @@ static void CG_DrawStatusBar( void ) {
 				break;
 			}
 
-			// don't draw ammo value for knife
-			if ( cg.predictedPlayerState.weapon != WP_DAGGER ) {
+
 				if ( cgs.dmflags & DF_NO_WEAPRELOAD ) {
 					CG_DrawBigString2( ( 580 - 23 + 35 ) + wideOffset, STATUSBARHEIGHT, va( "%d.", value ), cg_hudAlpha.value );
 				} else if ( value ) {
@@ -796,7 +795,6 @@ static void CG_DrawStatusBar( void ) {
 				} else {
 					CG_DrawBigString2( ( 580 - 23 + 35 ) + wideOffset, STATUSBARHEIGHT, va( "%d", inclip ), cg_hudAlpha.value );
 				}
-			}
             
 			icon = cg_weapons[ cg.predictedPlayerState.weapon ].weaponIcon[0];
 			if ( icon ) {
@@ -1062,7 +1060,7 @@ static void CG_DrawUpperRight(stereoFrame_t stereoFrame) {
 	if (cg_drawFPS.integer && (stereoFrame == STEREO_CENTER || stereoFrame == STEREO_RIGHT)) {
 		y = CG_DrawFPS( y );
 	}
-	if (cg_drawTimer.integer || cgs.gametype == GT_SURVIVAL)
+	if (cg_drawTimer.integer)
 	{
 		y = CG_DrawTimer(y);
 	}
@@ -1761,10 +1759,54 @@ for a few moments
 ==============
 */
 void CG_BuyPrint( const char *str, int y, int charWidth ) {
-	char   *s;
+	char   *s, *p, *c = cg.buyPrint;
+	char   token[64];
+	const char *trToken;
+	int    lenTrToken;
+	int    destSizeBuyPrint = sizeof( cg.buyPrint );
+
+	s = p = str;
+	while ( 1 ) {
+		if ( Q_isalphanumeric( *s ) ) {
+			if ( !Q_isforfilename( *p ) || *p == '\r' || *p == '\n' || *p == '\0' ) {
+				// copy translation key
+				Q_strncpyz( token, s, p - s + 1 );
+
+				// get translation
+				trToken = CG_translateString( token );
+
+				if ( Q_strncmp( trToken, token, 999999 ) == 0 ) {
+					trToken = CG_translateTextString( token );
+				}
+
+				lenTrToken = strlen( trToken );
+
+				// append translation
+				Q_strncpyz( c, trToken, destSizeBuyPrint );
+				destSizeBuyPrint -= lenTrToken;
+				c += lenTrToken;
+
+				// copy separator
+				Q_strncpyz( token, p, 2 );
+
+				// append separator
+				Q_strncpyz( c, token, destSizeBuyPrint );
+				destSizeBuyPrint -= 1;
+				c += 1;
+
+				s = p + 1;
+			}
+		} else {
+			s = p;
+		}
+
+		if ( !( *p++ ) ) {
+			break;
+		}
+	}
 
 //----(SA)	added translation lookup
-	Q_strncpyz( cg.buyPrint, CG_translateString( (char*)str ), sizeof( cg.buyPrint ) );
+	//Q_strncpyz( cg.buyPrint, CG_translateString( (char*)str ), sizeof( cg.buyPrint ) );
 //----(SA)	end
 
 
@@ -2681,7 +2723,6 @@ static void CG_DrawCrosshair( void ) {
 
 		// special reticle for weapon
 	case WP_KNIFE:
-	case WP_DAGGER:
 		if ( cg.zoomedBinoc ) {
 			CG_DrawBinocReticle();
 			return;
@@ -2879,7 +2920,6 @@ static void CG_DrawCrosshair3D( void ) {
 		break;
 		// special reticle for weapon
 	case WP_KNIFE:
-	case WP_DAGGER:
 		if ( cg.zoomedBinoc ) {
 			CG_DrawBinocReticle();
 			return;

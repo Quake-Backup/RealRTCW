@@ -35,6 +35,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "g_local.h"
+#include "g_survival.h"
 
 char *hintStrings[] = {
 	"",                  // HINT_NONE
@@ -2149,6 +2150,9 @@ G_TryDoor
 */
 void G_TryDoor( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
 	qboolean walking = qfalse, locked = qfalse;
+
+	int price;
+	price = ent->price;
 
 	walking = (qboolean)( ent->flags & FL_SOFTACTIVATE );
 
@@ -4677,20 +4681,44 @@ they /don't/ need to be all uppercase
 
 void use_invisible_user( gentity_t *ent, gentity_t *other, gentity_t *activator ) {
 	gentity_t *player;
+
 	int price;
+	int wave;
 
 	price = ent->price;
+    wave = ent->wave;
 
-	if ( !price ) {
-        price = 0;
-    }
+	if (g_gametype.integer == GT_SURVIVAL)
+	{
 
+		if (!price)
+		{
+			price = 0;
+		}
 
-	// Check if player has enough points
-    if (activator->client->ps.persistant[PERS_SCORE] < price) {
-        trap_SendServerCommand( -1, "mu_play sound/items/use_nothing.wav 0\n" );
-        return;  // Player doesn't have enough points
-    }
+		if (wave)
+		{
+
+			if (svParams.waveCount < wave)
+			{
+				trap_SendServerCommand(-1, "mu_play sound/items/use_nothing.wav 0\n");
+				return;
+			}
+		}
+
+		// Check if player has enough points
+		if (activator->client->ps.persistant[PERS_SCORE] < price)
+		{
+			trap_SendServerCommand(-1, "mu_play sound/items/use_nothing.wav 0\n");
+			return; // Player doesn't have enough points
+		}
+
+		// Restrict usage if targetname is "reinforce_call" and no friendly AI are spawned
+		if (Q_stricmp(ent->targetname, "reinforce_call") == 0 && svParams.spawnedThisWaveFriendly != svParams.aliveFriendliestoCallReinforce) {
+			trap_SendServerCommand(-1, "mu_play sound/items/use_nothing.wav 0\n");
+			return;
+		}
+	}
 
 	if ( ent->wait < level.time ) {
 		ent->wait = level.time + ent->delay;
@@ -4715,8 +4743,6 @@ void use_invisible_user( gentity_t *ent, gentity_t *other, gentity_t *activator 
 			}
 
 			G_UseTargets( ent, other );
-
-			// G_Printf ("ent%s used by %s\n", ent->classname, other->classname);
 		}
 
 		return;
@@ -4740,7 +4766,10 @@ void use_invisible_user( gentity_t *ent, gentity_t *other, gentity_t *activator 
 	G_UseTargets( ent, other ); //----(SA)	how about this so the triggered targets have an 'activator' as well as an 'other'?
 								//----(SA)	Please let me know if you forsee any problems with this.
 
-	activator->client->ps.persistant[PERS_SCORE] -= price;
+	if (g_gametype.integer == GT_SURVIVAL)
+	{
+		activator->client->ps.persistant[PERS_SCORE] -= price;
+	}
 }
 
 

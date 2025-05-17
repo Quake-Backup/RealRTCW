@@ -103,6 +103,7 @@ typedef enum {
     RADIUS_SCOPE_ANY,
     RADIUS_SCOPE_CLIENTS,
     RADIUS_SCOPE_NOCLIENTS,
+	RADIUS_SCOPE_AI,
 } RadiusScope;
 
 // door AI sound ranges
@@ -443,7 +444,8 @@ struct gentity_s {
 	int canSpeak;               // can this entity speak?
 	int price;                 // item price, survival mode
     char  *buy_item;
-	int isWeapon;               
+	int isWeapon;    
+	int wave;				   // wave number, survival mode           
 };
 
 // Ridah
@@ -496,6 +498,8 @@ typedef struct {
 	spectatorState_t spectatorState;
 	int spectatorClient;            // for chasecam and follow mode
 	int wins, losses;               // tournament stats
+	int playerType;                
+
 } clientSession_t;
 
 //
@@ -632,6 +636,8 @@ struct gclient_s {
 	pmoveExt_t pmext;
 
 	int healthRegenStartTime;
+
+	qboolean hasPurchased;
 };
 
 
@@ -766,6 +772,9 @@ typedef struct {
 	// RF, record last time we loaded, so we can hack around sighting issues on reload
 	int lastLoadTime;
 
+	// fretn - maybe not the best place to add this
+	char *maplist[MAX_MAPS];
+
 } level_locals_t;
 
 //extern    qboolean	reloading;				// loading up a savegame
@@ -813,9 +822,10 @@ void    Add_Ammo( gentity_t *ent, int weapon, int count, qboolean fillClip );
 void Touch_Item( gentity_t *ent, gentity_t *other, trace_t *trace );
 qboolean AddMagicAmmo( gentity_t *receiver, int numOfClips );
 
-int G_FindWeaponSlot( gentity_t *other, int weapon );
+int G_FindWeaponSlot( gentity_t *other, weapon_t weapon );
 int G_GetFreeWeaponSlot( gentity_t *other );
 void G_DropWeapon( gentity_t *ent, weapon_t weapon );
+qboolean Give_Weapon_New_Inventory( gentity_t *other, weapon_t weapon, qboolean needThrowItem );
 
 // Touch_Item_Auto is bound by the rules of autoactivation (if cg_autoactivate is 0, only touch on "activate")
 void Touch_Item_Auto( gentity_t *ent, gentity_t *other, trace_t *trace );
@@ -874,11 +884,11 @@ void G_ProcessTagConnect( gentity_t *ent, qboolean clearAngles );
 void G_AdjustedDamageVec( gentity_t *ent, vec3_t origin, vec3_t vec );
 qboolean CanDamage( gentity_t *targ, vec3_t origin );
 void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_t dir, vec3_t point, int damage, int dflags, int mod );
+void G_DamageExt( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker, vec3_t dir, vec3_t point, int damage, int dflags, int mod, int *hitEventType );
 qboolean G_RadiusDamage( vec3_t origin, gentity_t *attacker, float damage, float radius, gentity_t *ignore, int mod );
 qboolean G_RadiusDamage2( vec3_t origin, gentity_t *inflictor, gentity_t *attacker, float damage, float radius, gentity_t *ignore, int mod, RadiusScope scope );
 void body_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath );
 void TossClientWeapons( gentity_t *self );
-void TossClientPowerups( gentity_t *self, gentity_t *attacker );
 
 // damage flags
 #define DAMAGE_RADIUS               0x00000001  // damage was indirect
@@ -964,7 +974,6 @@ int TeamCount( int ignoreClientNum, team_t team );
 team_t PickTeam( int ignoreClientNum );
 void SetClientViewAngle( gentity_t *ent, vec3_t angle );
 gentity_t *SelectSpawnPoint( vec3_t avoidPoint, vec3_t origin, vec3_t angles );
-gentity_t *SelectSpawnPoint_AI( gentity_t *player, vec3_t origin, vec3_t angles );
 void ClientRespawn(gentity_t *ent);
 void BeginIntermission( void );
 void InitBodyQue( void );
@@ -1064,8 +1073,14 @@ void G_QueueBotBegin( int clientNum );
 qboolean G_BotConnect( int clientNum, qboolean restart );
 void Svcmd_AddBot_f( void );
 
+void G_LoadArenas( void );
+
 // ai_cast_characters.c
 void AI_LoadBehaviorTable( AICharacters_t characterNum );
+
+// ai_cast_funcs.c
+void AI_LoadSurvivalTable( const char* mapname );
+qboolean BG_ParseSurvivalTable( int handle );
 
 // ai_main.c
 #define MAX_FILEPATH            144
@@ -1139,6 +1154,8 @@ extern vmCvar_t g_midgame;
 extern vmCvar_t g_dlc1;
 extern vmCvar_t g_class;
 extern vmCvar_t g_noobTube;
+
+extern vmCvar_t g_playerSurvivalClass;
 
 extern vmCvar_t g_reloading;        //----(SA)	added
 
@@ -1233,6 +1250,9 @@ extern vmCvar_t g_realism;
 extern vmCvar_t g_regen;
 extern vmCvar_t	g_flushItems;
 extern vmCvar_t g_vanilla_guns;
+
+// Safe endgame fix
+extern qboolean g_endgameTriggered;
 
 void	trap_Print( const char *text );
 void	trap_Error( const char *text ) __attribute__((noreturn));
@@ -1456,6 +1476,7 @@ void	*trap_Alloc( int size );
 
 gentity_t* G_FindSmokeBomb( gentity_t* start );
 void G_PoisonGasExplode  ( gentity_t* );
+void G_PoisonGas2Explode  ( gentity_t* );
 
 void G_SetTargetName( gentity_t* ent, char* targetname );
 

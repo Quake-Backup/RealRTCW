@@ -45,6 +45,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "../botlib/botai.h"          //bot ai interface
 
 #include "ai_cast.h"
+#include "g_survival.h"
 
 /*
 The Wolfenstein AI uses the bot movement functions, and goal handling.
@@ -435,7 +436,8 @@ gentity_t *AICast_CreateCharacter( gentity_t *ent, float *attributes, cast_weapo
     
 	// Unlimited respawn in Survival mode
 	if ( g_gametype.integer == GT_SURVIVAL )  {
-	    cs->respawnsleft = -1;
+		AICast_ApplySurvivalAttributes(newent, cs);
+	    AICast_CreateCharacter_Survival(newent, cs);
 	} else {
 		cs->respawnsleft = g_airespawn.integer;
 	}
@@ -486,30 +488,14 @@ void AICast_Init( void ) {
 	numcast = 0;
 	numSpawningCast = 0;
 	saveGamePending = qtrue;
-
-    // Initial count of AIs for survival mode
-    if ( g_gametype.integer == GT_SURVIVAL )  {
-		killCountRequirement = 5;
-		waveCount = 1;
-		maxActiveAI[AICHAR_SOLDIER] = 5;
-	    maxActiveAI[AICHAR_ZOMBIE_SURV] = 5;
-	    maxActiveAI[AICHAR_ZOMBIE_GHOST] = 0;
-	    maxActiveAI[AICHAR_WARZOMBIE] = 0;
-	    maxActiveAI[AICHAR_PRIEST] = 0;
-	    maxActiveAI[AICHAR_ELITEGUARD] = 0;
-		maxActiveAI[AICHAR_BLACKGUARD] = 0;
-		maxActiveAI[AICHAR_VENOM] = 0;
+	
+	if (g_gametype.integer == GT_SURVIVAL) {
+		AICast_InitSurvival();
 	}
 
 	trap_Cvar_Register( &aicast_debug, "aicast_debug", "0", 0 );
 	trap_Cvar_Register( &aicast_debugname, "aicast_debugname", "", 0 );
 	trap_Cvar_Register( &aicast_scripts, "aicast_scripts", "1", 0 );
-
-	// (aicast_thinktime / sv_fps) * aicast_maxthink = number of cast's to think between each aicast frame
-	// so..
-	// (100 / 20) * 6 = 30
-	//
-	// so if the level has more than 30 AI cast's, they could start to bunch up, resulting in slower thinks
 
 	trap_Cvar_Register( &cvar, "aicast_thinktime", "50", 0 );
 	aicast_thinktime = trap_Cvar_VariableIntegerValue( "aicast_thinktime" );
@@ -519,22 +505,13 @@ void AICast_Init( void ) {
 
 	aicast_maxclients = trap_Cvar_VariableIntegerValue( "sv_maxclients" );
 
-	aicast_skillscale = (float)trap_Cvar_VariableIntegerValue( "g_gameSkill" ) / (float)GSKILL_REALISM;
+	aicast_skillscale = (float)trap_Cvar_VariableIntegerValue( "g_gameSkill" ) / (float)GSKILL_SURVIVAL;
 
 	caststates = G_Alloc( aicast_maxclients * sizeof( cast_state_t ) );
 	memset( caststates, 0, sizeof( *caststates ) );
 	for ( i = 0; i < MAX_CLIENTS; i++ ) {
 		caststates[i].entityNum = i;
 	}
-
-/* RF, this is useless, since the AAS hasnt been loaded yet
-	// try and load in the AAS now, so we can interact with it during spawning of entities
-	i = 0;
-	trap_AAS_SetCurrentWorld( 0 );
-	while ( !trap_AAS_Initialized() && ( i++ < 10 ) ) {
-		trap_BotLibStartFrame( (float) level.time / 1000 );
-	}
-*/
 }
 
 /*
@@ -604,12 +581,15 @@ AIChar_AIScript_AlertEntity
 ============
 */
 void AIChar_AIScript_AlertEntity( gentity_t *ent ) {
+
+	if (g_gametype.integer == GT_SURVIVAL) {
+		AIChar_AIScript_AlertEntity_Survival(ent);
+		return;
+	}
+
 	vec3_t mins, maxs;
 	int numTouch, touch[10], i;
 	cast_state_t    *cs;
-	vec3_t spawn_origin, spawn_angles;
-
-	gentity_t *player = AICast_FindEntityForName( "player" );
 
 	if ( !ent->aiInactive ) {
 		return;
@@ -644,23 +624,6 @@ void AIChar_AIScript_AlertEntity( gentity_t *ent ) {
 		return;
 	}
 
-    if ( g_gametype.integer == GT_SURVIVAL )  {
-	   if ( activeAI[ent->aiCharacter] >= maxActiveAI[ent->aiCharacter])  { 
-		cs->aiFlags |= AIFL_WAITINGTOSPAWN;
-		return;
-	   }
-	}
-
-	// Selecting the spawn point for the AI
-    if ( g_gametype.integer == GT_SURVIVAL )  {
-				SelectSpawnPoint_AI( player, spawn_origin, spawn_angles );
-				G_SetOrigin( ent, spawn_origin );
-				VectorCopy( spawn_origin, ent->client->ps.origin );
-				SetClientViewAngle( ent, spawn_angles );
-				// Increment the counter for active AI characters
-                activeAI[ent->aiCharacter]++;
-	}
-
 	// RF, has to disable this so I could test some maps which have erroneously placed alertentity calls
 	//ent->AIScript_AlertEntity = NULL;
 	cs->aiFlags &= ~AIFL_WAITINGTOSPAWN;
@@ -668,11 +631,7 @@ void AIChar_AIScript_AlertEntity( gentity_t *ent ) {
 	trap_LinkEntity( ent );
 
 	// trigger a spawn script event
-	if ( g_gametype.integer == GT_SURVIVAL )  {
-	   AICast_ScriptEvent( AICast_GetCastState( ent->s.number ), "respawn", "" );
-	} else {
-	   AICast_ScriptEvent( AICast_GetCastState( ent->s.number ), "spawn", "" );
-	}
+	AICast_ScriptEvent( AICast_GetCastState( ent->s.number ), "spawn", "" );
 	// make it think so we update animations/angles
 	AICast_Think( ent->s.number, (float)FRAMETIME / 1000 );
 	cs->lastThink = level.time;

@@ -48,6 +48,8 @@ If you have questions concerning this license or the applicable additional terms
 
 #include "../steam/steam.h"
 
+#include <stdlib.h> // for rand()
+
 /*
 Contains the code to handle the various commands available with an event script.
 
@@ -1408,6 +1410,66 @@ qboolean AICast_ScriptAction_GiveAmmo( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
+
+/*
+==============
+AICast_ScriptAction_IncreaseRespawns
+
+  syntax: increaserespawns <ainame> <amount>
+
+  Increases the respawnsleft value for the specified AI entity by the specified amount.
+==============
+*/
+qboolean AICast_ScriptAction_IncreaseRespawns(cast_state_t *cs, char *params) {
+    char *pString, *token;
+    char aiName[MAX_QPATH];
+    int amount;
+    gentity_t *targetEnt;
+    cast_state_t *targetCs;
+
+    // Parse the AI name
+    pString = params;
+    token = COM_ParseExt(&pString, qfalse);
+    if (!token[0]) {
+        G_Error("AI Scripting: increaserespawns requires an AI name and an amount\n");
+    }
+    Q_strncpyz(aiName, token, sizeof(aiName));
+
+    // Parse the amount
+    token = COM_ParseExt(&pString, qfalse);
+    if (!token[0]) {
+        G_Error("AI Scripting: increaserespawns requires an amount\n");
+    }
+    amount = atoi(token);
+
+    // Find the target entity by AI name
+    targetEnt = AICast_FindEntityForName(aiName);
+    if (!targetEnt || !targetEnt->client) {
+        G_Error("AI Scripting: increaserespawns could not find AI with name '%s'\n", aiName);
+    }
+
+    // Get the cast state of the target entity
+    targetCs = AICast_GetCastState(targetEnt->s.clientNum);
+    if (!targetCs) {
+        G_Error("AI Scripting: increaserespawns could not get cast state for AI '%s'\n", aiName);
+    }
+
+    // Increase the respawnsleft value
+    targetCs->respawnsleft += amount;
+
+    // Ensure respawnsleft does not go below 0
+    if (targetCs->respawnsleft < 0) {
+        targetCs->respawnsleft = 0;
+    }
+
+    // Optional: Print debug information
+    G_Printf("AI '%s' respawnsleft increased by %d. New value: %d\n",
+             aiName, amount, targetCs->respawnsleft);
+
+    return qtrue;
+}
+
+
 /*
 ==============
 AICast_ScriptAction_GiveHealth
@@ -1487,27 +1549,44 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		}
 	}
 
-	if ( weapon != WP_KNIFE ) {
-		if ( slotId < 0 ) {
-			return qfalse;
+	if (!ent->aiCharacter)
+	{
+		if (g_newinventory.integer > 0 || g_gametype.integer == GT_SURVIVAL)
+		{
+			if (weapon != WP_KNIFE)
+			{
+				if (slotId < 0)
+				{
+					return qfalse;
+				}
+			}
+			else
+			{
+				slotId = 0;
+			}
 		}
-
-	} else {
-		slotId = 0;
 	}
 
-
 	if ( weapon != WP_NONE ) {
-		COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, weapon );
+		COM_BitSet(g_entities[cs->entityNum].client->ps.weapons, weapon);
 
-		// if ( weapon == WP_KNIFE ) {
-		// 	if ( ent->client->ps.weaponSlots[ 0 ] != WP_NONE ) {
-		// 		ent->client->ps.weaponSlots[ slotId ] = ent->client->ps.weaponSlots[ 0 ];
-		// 		ent->client->ps.weaponSlots[ 0 ] = weapon;
-		// 	}
-		// }
-
-		ent->client->ps.weaponSlots[ slotId ] = weapon;
+		if (!ent->aiCharacter)
+		{
+			if (g_newinventory.integer > 0 || g_gametype.integer == GT_SURVIVAL)
+			{
+				if (weapon != WP_AIRSTRIKE && weapon != WP_ARTY && weapon != WP_POISONGAS_MEDIC) // Skip WP_AIRSTRIKE and WP_ARTY	
+				{
+					if (ent->client->ps.stats[STAT_PLAYER_CLASS] == PC_SOLDIER)
+					{
+						ent->client->ps.weaponSlotsSoldier[slotId] = weapon;
+					}
+					else
+					{
+						ent->client->ps.weaponSlots[slotId] = weapon;
+					}
+				}
+			}
+		}
 
 //----(SA)	some weapons always go together (and they share a clip, so this is okay)
 		if ( weapon == WP_GARAND ) {
@@ -1516,9 +1595,12 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		if ( weapon == WP_SNOOPERSCOPE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_GARAND );
 		}
-		if ( weapon == WP_FG42 ) {
-			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_FG42SCOPE );
-		}
+        if ( weapon == WP_FG42 ) {
+         // Only grant FG42SCOPE if the entity is not an AI
+          if ( !ent->aiCharacter ) {
+            COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_FG42SCOPE );
+          }
+        }
 		if ( weapon == WP_SNIPERRIFLE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_MAUSER );
 		}
@@ -1531,8 +1613,7 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 //----(SA)	end
 
 		// monsters have full ammo for their attacks
-		// knife gets infinite ammo too
-		if ( !Q_strncasecmp( params, "monsterattack", 13 ) || weapon == WP_DAGGER ) {
+		if ( !Q_strncasecmp( params, "monsterattack", 13 ) ) {
 			g_entities[cs->entityNum].client->ps.ammo[BG_FindAmmoForWeapon( weapon )] = 999;
 			Fill_Clip( &g_entities[cs->entityNum].client->ps, weapon );    
 		}
@@ -1567,6 +1648,27 @@ qboolean AICast_ScriptAction_GiveWeaponFull( cast_state_t *cs, char *params ) {
 	int i;
 	gentity_t   *ent = &g_entities[cs->entityNum];
 
+	char localParams[256];
+    char *tokens[16];
+    int tCount = 0;
+    char *chosenParam;
+    char *token;
+
+	Q_strncpyz(localParams, params, sizeof(localParams));
+
+	token = strtok(localParams, " ");
+    while (token && tCount < 16)
+    {
+        tokens[tCount++] = token;
+        token = strtok(NULL, " ");
+    }
+
+    if (tCount > 1) {
+        chosenParam = tokens[rand() % tCount];
+	} else {
+        chosenParam = tokens[0];
+	}
+
 	int maxAmmo = sizeof(ammoTable) / sizeof(ammoTable[0]);
 	
 	weapon = WP_NONE;
@@ -1577,18 +1679,16 @@ qboolean AICast_ScriptAction_GiveWeaponFull( cast_state_t *cs, char *params ) {
 	memset( g_entities[cs->entityNum].client->ps.ammoclip, 0, sizeof( g_entities[cs->entityNum].client->ps.ammoclip ) );
 	cs->weaponNum = WP_NONE;
 
-	for ( i = 1; bg_itemlist[i].classname; i++ )
-	{
-		//----(SA)	first try the name they see in the editor, then the pickup name
-		if ( !Q_strcasecmp( params, bg_itemlist[i].classname ) ) {
-			weapon = bg_itemlist[i].giTag;
-			break;
-		}
-
-		if ( !Q_strcasecmp( params, bg_itemlist[i].pickup_name ) ) {
-			weapon = bg_itemlist[i].giTag;
-		}
-	}
+    for ( i = 1; bg_itemlist[i].classname; i++ )
+    {
+        if ( !Q_strcasecmp( chosenParam, bg_itemlist[i].classname ) ) {
+            weapon = bg_itemlist[i].giTag;
+            break;
+        }
+        if ( !Q_strcasecmp( chosenParam, bg_itemlist[i].pickup_name ) ) {
+            weapon = bg_itemlist[i].giTag;
+        }
+    }
 
     // Weapon randomizer
 
@@ -1785,9 +1885,12 @@ if ( !Q_strcasecmp (params, "soviet_random") )
 		if ( weapon == WP_SNOOPERSCOPE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_GARAND );
 		}
-		if ( weapon == WP_FG42 ) {
-			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_FG42SCOPE );
-		}
+        if ( weapon == WP_FG42 ) {
+         // Only grant FG42SCOPE if the entity is not an AI
+          if ( !ent->aiCharacter ) {
+            COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_FG42SCOPE );
+          }
+        }
 		if ( weapon == WP_SNIPERRIFLE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_MAUSER );
 		}
@@ -2055,6 +2158,9 @@ qboolean AICast_ScriptAction_GivePerk( cast_state_t *cs, char *params ) {
 	int i;
 	gitem_t     *item = 0;
 
+	int clientNum;
+	clientNum = level.sortedClients[0];
+
 	for ( i = 1; bg_itemlist[i].classname; i++ ) {
 		if ( !Q_strcasecmp( params, bg_itemlist[i].classname ) ) {
 			item = &bg_itemlist[i];
@@ -2073,6 +2179,8 @@ qboolean AICast_ScriptAction_GivePerk( cast_state_t *cs, char *params ) {
 		g_entities[cs->entityNum].client->ps.perks[item->giTag] += 1;   // add default of 1
 		g_entities[cs->entityNum].client->ps.stats[STAT_PERK] |= ( 1 << item->giTag );
 	}
+
+	ClientUserinfoChanged( clientNum );
 
 	return qtrue;
 }
@@ -2853,8 +2961,6 @@ qboolean AICast_ScriptAction_PrintBonus( cast_state_t *cs, char *params ) {
 
 	newstr = va( "%s", params );
 
-	trap_SendServerCommand( -1, "mu_play sound/misc/bonus.wav 0\n" );
-
 	if ( !Q_stricmp( newstr, "escape1" ) ) { 
 	    trap_SendServerCommand( -1, "bcp bonus_escape1" ); 
 	}
@@ -3416,7 +3522,7 @@ AICast_ScriptAction_EndGame
 ==============
 */
 qboolean AICast_ScriptAction_EndGame( cast_state_t *cs, char *params ) {
-	G_EndGame();
+	g_endgameTriggered = qtrue;
 	return qtrue;
 }
 
@@ -3467,18 +3573,19 @@ qboolean AICast_ScriptAction_ChangeLevel( cast_state_t *cs, char *params ) {
 	qboolean silent = qfalse, endgame = qfalse, savepersist = qfalse;
 	int exitTime = 8000;
 
-	//ent = &g_entities[client];
-
-	if (g_decaychallenge.integer){
-	player->health = 999;
-	}
-	/*char mapname[MAX_QPATH];
-
-	if ( Q_stricmp( mapname, "escape2"))
+	if (g_decaychallenge.integer)
 	{
-    steamSetAchievement("ACH_TRAINING");
+		player->health = 999;
 	}
-	*/
+
+	// Endmap bonuses for finding all secrets
+	if (g_endmapbonus.integer && level.numSecrets > 0) {
+	   if (player->numSecretsFound == level.numSecrets) 
+	   {
+          trap_SendServerCommand( -1, "mu_play sound/misc/bonus.wav 0\n" );
+		  AICast_ScriptEvent( AICast_GetCastState( player->s.number ), "trigger", "endmap_bonus" );
+	   }
+	}
 
 	player = AICast_FindEntityForName( "player" );
 	// double check that they are still alive
@@ -3487,7 +3594,6 @@ qboolean AICast_ScriptAction_ChangeLevel( cast_state_t *cs, char *params ) {
 
 	}
 	// don't process if already changing
-//	if(reloading)
 	if ( g_reloading.integer ) {
 		return qtrue;
 	}
@@ -3527,8 +3633,11 @@ qboolean AICast_ScriptAction_ChangeLevel( cast_state_t *cs, char *params ) {
 		}
 	}
 
-	if ( !Q_stricmp( newstr, "gamefinished" ) ) { // 'gamefinished' is keyword for 'exit to credits'
-		endgame = qtrue;
+	if (!Q_stricmp(newstr, "gamefinished"))
+	{
+		trap_Cvar_Set("g_reloading", va("%d", RELOAD_ENDGAME));
+		level.reloadDelayTime = level.time + 100 + exitTime; // add a delay
+		return qtrue;
 	}
 
 	if ( !endgame ) {
@@ -3562,17 +3671,13 @@ qboolean AICast_ScriptAction_ChangeLevel( cast_state_t *cs, char *params ) {
 	level.reloadDelayTime = level.time + 1000 + exitTime;
 	trap_Cvar_Set( "g_reloading", va( "%d", RELOAD_NEXTMAP_WAITING ) );
 
-	if ( endgame ) {
-		trap_Cvar_Set( "g_reloading", va( "%d", RELOAD_ENDGAME ) );
-		return qtrue;
-	}
+	// Commented this out, moved elsewhere
+	/*if ( endgame ) {
+		//trap_Cvar_Set( "g_reloading", va( "%d", RELOAD_ENDGAME ) );
+		//return qtrue;
+	}*/
 
 	Q_strncpyz( level.nextMap, newstr, sizeof( level.nextMap ) );
-
-	//if (g_cheats.integer)
-	//	trap_SendConsoleCommand( EXEC_APPEND, va("spdevmap %s\n", newstr) );
-	//else
-	//	trap_SendConsoleCommand( EXEC_APPEND, va("spmap %s\n", newstr ) );
 
 	return qtrue;
 }
@@ -5231,6 +5336,99 @@ qboolean AICast_ScriptAction_Achievement_MALTA_AGENT2( cast_state_t *cs, char *p
 
 /*
 ==================
+AICast_ScriptAction_Achievement_ICE_BEAT
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_ICE_BEAT( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_ICE_BEAT");
+	}
+	return qtrue;
+}
+
+/*
+==================
+AICast_ScriptAction_Achievement_ICE_DH
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_ICE_DH( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_ICE_DH");
+	}
+	return qtrue;
+}
+
+/*
+==================
+AICast_ScriptAction_Achievement_ICE_STEALTH
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_ICE_STEALTH( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_ICE_STEALTH");
+	}
+	return qtrue;
+}
+
+/*
+==================
+AICast_ScriptAction_Achievement_ICE_SECRET
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_ICE_SECRET( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_ICE_SECRET");
+	}
+	return qtrue;
+}
+
+/*
+==================
+AICast_ScriptAction_Achievement_ICE_DEFENSE
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_ICE_DEFENSE( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_ICE_DEFENSE");
+	}
+	return qtrue;
+}
+
+/*
+==================
+AICast_ScriptAction_Achievement_ICE_EE
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_ICE_EE( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_ICE_EE");
+	}
+	return qtrue;
+}
+
+/*
+==================
+AICast_ScriptAction_Achievement_6PERKS
+==================
+*/
+qboolean AICast_ScriptAction_Achievement_6PERKS( cast_state_t *cs, char *params ) {
+	if ( !g_cheats.integer ) 
+	{
+    steamSetAchievement("ACH_6PERKS");
+	}
+	return qtrue;
+}
+
+
+
+/*
+==================
 AICast_ScriptAction_FoundSecret
 ==================
 */
@@ -5818,19 +6016,35 @@ AICast_ScriptAction_MusicQueue
 ==================
 */
 qboolean AICast_ScriptAction_MusicQueue( cast_state_t *cs, char *params ) {
-	char    *pString, *token;
-	char cvarName[MAX_QPATH];
+    char *pString, *token;
+    char cvarNameArray[16][MAX_INFO_STRING];
+    int fileCount = 0;
 
-	pString = params;
-	token = COM_ParseExt( &pString, qfalse );
-	if ( !token[0] ) {
-		G_Error( "AI_Scripting: syntax: mu_queue <musicfile>" );
-	}
-	Q_strncpyz( cvarName, token, sizeof( cvarName ) );
+    pString = params;
+    while (1) {
+        token = COM_ParseExt(&pString, qfalse);
+        if (!token[0]) {
+            break;
+        }
+        Q_strncpyz(cvarNameArray[fileCount], token, sizeof(cvarNameArray[fileCount]));
+        fileCount++;
+        if (fileCount >= 16) {
+            break;
+        }
+    }
 
-	trap_SetConfigstring( CS_MUSIC_QUEUE, cvarName );
+    if (fileCount == 0) {
+        G_Error("AI_Scripting: syntax: mu_queue <musicfile> [musicfile2] ...");
+    }
 
-	return qtrue;
+    if (fileCount == 1) {
+        trap_SetConfigstring(CS_MUSIC_QUEUE, cvarNameArray[0]);
+    } else {
+        int randomIndex = rand() % fileCount;
+        trap_SetConfigstring(CS_MUSIC_QUEUE, cvarNameArray[randomIndex]);
+    }
+
+    return qtrue;
 }
 
 
