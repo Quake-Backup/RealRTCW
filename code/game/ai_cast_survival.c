@@ -66,6 +66,7 @@ void AICast_InitSurvival(void) {
 	svParams.maxActiveAI[AICHAR_SOLDIER] = svParams.initialSoldiersCount;
 	svParams.maxActiveAI[AICHAR_ZOMBIE_SURV] = svParams.initialZombiesCount;
 	svParams.maxActiveAI[AICHAR_ZOMBIE_GHOST] = svParams.initialGhostsCount;
+	svParams.maxActiveAI[AICHAR_ZOMBIE_FLAME] = svParams.initialFlamersCount;
 	svParams.maxActiveAI[AICHAR_WARZOMBIE] = svParams.initialWarriorsCount;
 	svParams.maxActiveAI[AICHAR_PROTOSOLDIER] = svParams.initialProtosCount;
 	svParams.maxActiveAI[AICHAR_PARTISAN] = svParams.initialPartisansCount;
@@ -186,6 +187,110 @@ void AIChar_AIScript_AlertEntity_Survival( gentity_t *ent ) {
 	trap_BotUserCommand( cs->bs->client, &( cs->lastucmd ) );
 }
 
+
+/*
+===============
+AICast_RegisterSurvivalKill
+
+Handles wave and survival kill counters + progression trigger.
+Call this from AICast_Die_Survival.
+===============
+*/
+void AICast_RegisterSurvivalKill(gentity_t *self, gentity_t *attacker, int meansOfDeath) {
+	if (!self || !attacker || !svParams.waveInProgress)
+		return;
+
+	// Only count kills from players or friendly AI
+	qboolean killerPlayer   = attacker->client && !attacker->aiCharacter;
+	qboolean killerFriendly = attacker->aiCharacter && attacker->aiTeam == 1;
+
+	if (!killerPlayer && !killerFriendly)
+		return;
+
+	svParams.survivalKillCount++;
+	svParams.waveKillCount++;
+
+	if (killerPlayer) {
+		Survival_AddKillScore(attacker, self, meansOfDeath);
+	}
+
+	// Always use attacker to trigger progression check
+	AICast_CheckSurvivalProgression(attacker);
+}
+
+
+/*
+====================
+AICast_SetRebirthTimeSurvival
+
+Centralized function for calculating AI rebirth time in Survival mode.
+Handles friendly AI, and special cases per AI character if needed.
+====================
+*/
+void AICast_SetRebirthTimeSurvival(gentity_t *ent, cast_state_t *cs) {
+	if (!ent || !cs)
+		return;
+
+	// Skip characters that should never respawn
+	if (ent->aiCharacter == AICHAR_ZOMBIE || 
+		ent->aiCharacter == AICHAR_HELGA || 
+		ent->aiCharacter == AICHAR_HEINRICH || 
+		cs->norespawn)
+		return;
+
+	if (ent->aiTeam == AITEAM_ALLIES) { // Friendly AI
+		if (cs->respawnsleft > 0) {
+			cs->respawnsleft--;
+		}
+		svParams.spawnedThisWaveFriendly--;
+		cs->rebirthTime = level.time + (svParams.friendlySpawnTime * 1000) + rand() % 2000;
+		return;
+	}
+
+	// Non-friendly AI
+	if (cs->respawnsleft != 0) {
+		if (cs->respawnsleft > 0) {
+			cs->respawnsleft--;
+		}
+
+		int baseTime;
+
+		switch (ent->aiCharacter) {
+			case AICHAR_ELITEGUARD:
+				baseTime = svParams.egSpawnTime * 1000;
+				break;
+			case AICHAR_BLACKGUARD:
+				baseTime = svParams.bgSpawnTime * 1000;
+				break;
+			case AICHAR_VENOM:
+				baseTime = svParams.vSpawnTime * 1000;
+				break;
+			case AICHAR_PROTOSOLDIER:
+				baseTime = svParams.protoSpawnTime * 1000;
+				break;
+			case AICHAR_WARZOMBIE:
+				baseTime = svParams.warzSpawnTime * 1000;
+				break;
+			case AICHAR_ZOMBIE_GHOST:
+				baseTime = svParams.ghostSpawnTime * 1000;
+				break;
+			case AICHAR_PRIEST:
+				baseTime = svParams.priestSpawnTime * 1000;
+				break;
+			case AICHAR_ZOMBIE_FLAME:
+				baseTime = svParams.flamerSpawnTime * 1000;
+				break;
+			default: // Regular soldiers and zombies
+				baseTime = svParams.defaultSpawnTime * 1000;
+				break;
+		}
+
+		baseTime += rand() % 2000; // slight randomness
+
+		cs->rebirthTime = level.time + baseTime;
+	}
+}
+
 /*
 ============
 AICast_Die_Survival
@@ -196,7 +301,6 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 	int killer = 0;
 	cast_state_t    *cs;
 	qboolean nogib = qtrue;
-	char mapname[MAX_QPATH];
 	qboolean respawn = qfalse;
 
 	// Achievements related stuff! 
@@ -205,11 +309,8 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 	qboolean modKnife = (meansOfDeath == MOD_KNIFE);
 	qboolean modCrush = (meansOfDeath == MOD_CRUSH);
 	qboolean modFalling = (meansOfDeath == MOD_FALLING);
-	qboolean modFlamer = (meansOfDeath == MOD_FLAMETHROWER);
 	qboolean killerPlayer	 = attacker && attacker->client && !( attacker->aiCharacter );
 	qboolean killerEnv	 = attacker && !(attacker->client) && !( attacker->aiCharacter );
-	qboolean killerFriendly = attacker && attacker->aiCharacter && (attacker->aiTeam == 1);
-	qboolean modMG = (meansOfDeath == MOD_MACHINEGUN);
 
     // ETSP Achievements stuff!
 	qboolean modGL = (meansOfDeath == MOD_M7 );
@@ -292,11 +393,6 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		}
 	}
 
-	if (killerPlayer && (attacker->aiTeam != self->aiTeam))
-	{
-		Survival_AddKillScore(attacker, self, meansOfDeath);
-	}
-
 	  if (killerPlayer && attacker->client->ps.powerups[PW_VAMPIRE]) {
 
 			trap_SendServerCommand( -1, "mu_play sound/Zombie/firstsight/firstsight3.wav 0\n" );
@@ -315,37 +411,7 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		G_Printf( "killed %s\n", self->aiName );
 	}
 
-		// Decrement the counter for active AI characters
-	if ( (killerPlayer || killerFriendly) && (attacker->aiTeam != self->aiTeam))
-	{
-		svParams.survivalKillCount++;
-		svParams.waveKillCount++;
-		if (killerPlayer)
-		{
-			AICast_CheckSurvivalProgression(attacker);
-		}
-		else
-		{
-			// If attacker is friendly AI, call progression with a player entity
-			AICast_CheckSurvivalProgression(&g_entities[0]);
-		}
-	}
-	
-	// That should cover mg42 static case
-	if (modMG && killerEnv )
-	{
-		svParams.survivalKillCount++;
-		svParams.waveKillCount++;
-		AICast_CheckSurvivalProgression(&g_entities[0]);
-	}
-
-	// That should cover flame traps case
-	if (modFlamer && killerEnv )
-	{
-		svParams.survivalKillCount++;
-		svParams.waveKillCount++;
-		AICast_CheckSurvivalProgression(&g_entities[0]);
-	}
+    AICast_RegisterSurvivalKill(self, attacker, meansOfDeath);
 
 	cs = AICast_GetCastState( self->s.number );
 
@@ -380,7 +446,7 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 	}
 
 	// Zombies are very fragile against highly explosives
-	if ( (self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST ) && damage > 20 && inflictor != attacker ) {
+	if ( (self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST || self->aiCharacter == AICHAR_ZOMBIE_FLAME  ) && damage > 20 && inflictor != attacker ) {
 		self->health = -999;
 		damage = 999;
 	}
@@ -389,7 +455,7 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 	if ( self->client->ps.pm_type == PM_DEAD ) {
 		// already dead
 		if ( self->health < GIB_HEALTH ) {
-			if ( self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST ) {
+			if ( self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST || self->aiCharacter == AICHAR_ZOMBIE_FLAME ) {
 				// RF, changed this so Zombies always gib now
 				GibEntity( self, killer );
 				nogib = qfalse;
@@ -456,7 +522,7 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 
 		// never gib in a nodrop
 		if ( self->health <= GIB_HEALTH ) {
-			if ( self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST ) {
+			if ( self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST || self->aiCharacter == AICHAR_ZOMBIE_FLAME  ) {
 				// RF, changed this so Zombies always gib now
 				GibEntity( self, killer );
 				nogib = qfalse;
@@ -530,31 +596,7 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		respawn = qtrue;
 		nogib = qtrue;
 
-	if ( ( respawn && self->aiCharacter != AICHAR_ZOMBIE && self->aiCharacter != AICHAR_HELGA
-		 && self->aiCharacter != AICHAR_HEINRICH && nogib && !cs->norespawn ) ) {
-
-			if (self->aiTeam == 1) {
-				// Friendly AI: Always set rebirthTime, even if respawnsleft is 0
-				if (cs->respawnsleft > 0) {
-					cs->respawnsleft--; // Decrement respawnsleft
-				}
-			
-				// Set rebirthTime for friendly AI
-				svParams.spawnedThisWaveFriendly--;
-				cs->rebirthTime = level.time + (svParams.friendlySpawnTime * 1000) + rand() % 2000;
-			
-			} else {
-				// Non-friendly AI: Only set rebirthTime if respawnsleft is not 0
-				if (cs->respawnsleft != 0) {
-					if (cs->respawnsleft > 0) {
-						cs->respawnsleft--; // Decrement respawnsleft
-					}
-			
-					int base = 5000 + rand() % 1000; // 5-6 seconds
-					cs->rebirthTime = level.time + base;
-				}
-			}
-	}
+    AICast_SetRebirthTimeSurvival(self, cs);
 
 	trap_LinkEntity( self );
 
@@ -675,6 +717,14 @@ void AICast_UpdateMaxActiveAI(void)
             svParams.maxActiveAI[AICHAR_PRIEST] = svParams.maxPriests;
         }
     }
+
+	// Flamers
+    if (svParams.waveCount >= svParams.waveFlamers) {
+        svParams.maxActiveAI[AICHAR_ZOMBIE_FLAME] += svParams.flamersIncrease;
+        if (svParams.maxActiveAI[AICHAR_ZOMBIE_FLAME] > svParams.maxFlamers) {
+            svParams.maxActiveAI[AICHAR_ZOMBIE_FLAME] = svParams.maxFlamers;
+        }
+    }
 }
 
 /*
@@ -687,94 +737,109 @@ AICast_ApplySurvivalAttributes
 ============
 */
 void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs) {
-    int steps = svParams.waveCount / 2; // +1 step every 5 waves
-    if (steps < 0) steps = 0;
+	// Default: +1 step every wave after wave 1
+	int steps = (svParams.waveCount > 1) ? svParams.waveCount / 1 : 0;
 
-    int newHealth = 0;
-    float runSpeedScale = 1.0f;
-    float sprintSpeedScale = 1.0f;
-    float crouchSpeedScale = 1.0f;
+	// Disable scaling if the character hasn't "unlocked" yet
+	if ((cs->aiCharacter == AICHAR_ELITEGUARD && svParams.waveCount < svParams.waveEg) ||
+		(cs->aiCharacter == AICHAR_BLACKGUARD && svParams.waveCount < svParams.waveBg) ||
+		(cs->aiCharacter == AICHAR_VENOM       && svParams.waveCount < svParams.waveV)  ||
+		(cs->aiCharacter == AICHAR_ZOMBIE_GHOST && svParams.waveCount < svParams.waveGhosts) ||
+		(cs->aiCharacter == AICHAR_WARZOMBIE    && svParams.waveCount < svParams.waveWarz)   ||
+		(cs->aiCharacter == AICHAR_PROTOSOLDIER && svParams.waveCount < svParams.waveProtos) ||
+		(cs->aiCharacter == AICHAR_PRIEST       && svParams.waveCount < svParams.wavePriests))
+	{
+		steps = 0;
+	}
 
-    switch (cs->aiCharacter) {
-        case AICHAR_SOLDIER:
-            newHealth = 20 + steps * 5;
-            if (newHealth > 50) newHealth = 50;
-            break;
-        case AICHAR_ELITEGUARD:
-            newHealth = 30 + steps * 5;
-            if (newHealth > 60) newHealth = 60;
-            break;
-        case AICHAR_BLACKGUARD:
-            newHealth = 40 + steps * 5;
-            if (newHealth > 80) newHealth = 80;
-            break;
-        case AICHAR_VENOM:
-            newHealth = 50 + steps * 5;
-            if (newHealth > 100) newHealth = 100;
-            break;
-        case AICHAR_ZOMBIE_SURV:
-            newHealth = 20 + steps * 5;
-            if (newHealth > 200) newHealth = 200;
-            runSpeedScale = 0.8f + steps * 0.1f;
-            if (runSpeedScale > 1.2f) runSpeedScale = 1.2f;
-            sprintSpeedScale = 1.2f + steps * 0.1f;
-            if (sprintSpeedScale > 1.6f) sprintSpeedScale = 1.6f;
-            crouchSpeedScale = 0.25f + steps * 0.1f;
-            if (crouchSpeedScale > 0.5f) crouchSpeedScale = 0.5f;
-            break;
-        case AICHAR_ZOMBIE_GHOST:
-            newHealth = 20 + steps * 5;
-            if (newHealth > 200) newHealth = 200;
-            runSpeedScale = 0.8f + steps * 0.1f;
-            if (runSpeedScale > 1.6f) runSpeedScale = 1.6f;
-            sprintSpeedScale = 1.2f + steps * 0.1f;
-            if (sprintSpeedScale > 2.0f) sprintSpeedScale = 2.0f;
-            crouchSpeedScale = 0.25f + steps * 0.1f;
-            if (crouchSpeedScale > 0.75f) crouchSpeedScale = 0.75f;
-            break;
-        case AICHAR_WARZOMBIE:
-            newHealth = 40 + steps * 5;
-            if (newHealth > 300) newHealth = 300;
-            runSpeedScale = 0.8f + steps * 0.1f;
-            if (runSpeedScale > 1.6f) runSpeedScale = 1.6f;
-            sprintSpeedScale = 1.2f + steps * 0.1f;
-            if (sprintSpeedScale > 2.0f) sprintSpeedScale = 2.0f;
-            crouchSpeedScale = 0.25f + steps * 0.1f;
-            if (crouchSpeedScale > 0.75f) crouchSpeedScale = 0.75f;
-            break;
-        case AICHAR_PROTOSOLDIER:
-            newHealth = 200 + steps * 5;
-            if (newHealth > 600) newHealth = 600;
-            runSpeedScale = 0.8f + steps * 0.1f;
-            if (runSpeedScale > 1.6f) runSpeedScale = 1.6f;
-            sprintSpeedScale = 1.2f + steps * 0.1f;
-            if (sprintSpeedScale > 1.5f) sprintSpeedScale = 1.5f;
-            crouchSpeedScale = 0.25f + steps * 0.1f;
-            if (crouchSpeedScale > 0.75f) crouchSpeedScale = 0.75f;
-            break;
-        case AICHAR_PARTISAN:
-            newHealth = 250 + steps * 5;
-            if (newHealth > 500) newHealth = 500;
-            break;
-        case AICHAR_PRIEST:
-            newHealth = 50 + steps * 5;
-            if (newHealth > 500) newHealth = 500;
-            runSpeedScale = 0.8f + steps * 0.1f;
-            if (runSpeedScale > 1.4f) runSpeedScale = 1.4f;
-            sprintSpeedScale = 1.2f + steps * 0.1f;
-            if (sprintSpeedScale > 2.0f) sprintSpeedScale = 2.0f;
-            crouchSpeedScale = 0.25f + steps * 0.1f;
-            if (crouchSpeedScale > 0.5f) crouchSpeedScale = 0.5f;
-            break;
-        default:
-            break;
-    }
+	int newHealth = 0;
+	float runSpeedScale = 1.0f;
+	float sprintSpeedScale = 1.0f;
+	float crouchSpeedScale = 1.0f;
 
-    // Apply the calculated attributes to the entity
-    ent->health = ent->client->ps.stats[STAT_HEALTH] = ent->client->ps.stats[STAT_MAX_HEALTH] = cs->attributes[STARTING_HEALTH] = newHealth;
-    ent->client->ps.runSpeedScale = runSpeedScale;
-    ent->client->ps.sprintSpeedScale = sprintSpeedScale;
-    ent->client->ps.crouchSpeedScale = crouchSpeedScale;
+	switch (cs->aiCharacter) {
+		case AICHAR_SOLDIER:
+			newHealth = 20 + steps * 5;
+			if (newHealth > 50) newHealth = 50;
+			break;
+
+		case AICHAR_ELITEGUARD:
+			newHealth = 30 + steps * 5;
+			if (newHealth > 60) newHealth = 60;
+			break;
+
+		case AICHAR_BLACKGUARD:
+			newHealth = 40 + steps * 5;
+			if (newHealth > 80) newHealth = 80;
+			break;
+
+		case AICHAR_VENOM:
+			newHealth = 50 + steps * 5;
+			if (newHealth > 100) newHealth = 100;
+			break;
+
+		case AICHAR_ZOMBIE_SURV:
+			newHealth = 20 + steps * 5;
+			if (newHealth > 200) newHealth = 200;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.2f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 1.6f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.5f);
+			break;
+
+		case AICHAR_ZOMBIE_GHOST:
+			newHealth = 20 + steps * 5;
+			if (newHealth > 200) newHealth = 200;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
+			break;
+
+		case AICHAR_WARZOMBIE:
+			newHealth = 40 + steps * 5;
+			if (newHealth > 300) newHealth = 300;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
+			break;
+
+		case AICHAR_PROTOSOLDIER:
+			newHealth = 250 + steps * 5;
+			if (newHealth > 600) newHealth = 600;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 1.5f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
+			break;
+
+		case AICHAR_PARTISAN:
+			newHealth = 250 + steps * 5;
+			if (newHealth > 500) newHealth = 500;
+			break;
+
+		case AICHAR_PRIEST:
+			newHealth = 250 + steps * 5;
+			if (newHealth > 500) newHealth = 500;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.4f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.5f);
+			break;
+
+		case AICHAR_ZOMBIE_FLAME:
+			newHealth = 50 + steps * 5;
+			if (newHealth > 500) newHealth = 500;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.4f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.5f);
+			break;
+
+		default:
+			break;
+	}
+
+	// Apply to entity
+	ent->health = ent->client->ps.stats[STAT_HEALTH] = ent->client->ps.stats[STAT_MAX_HEALTH] = cs->attributes[STARTING_HEALTH] = newHealth;
+	ent->client->ps.runSpeedScale    = runSpeedScale;
+	ent->client->ps.sprintSpeedScale = sprintSpeedScale;
+	ent->client->ps.crouchSpeedScale = crouchSpeedScale;
 }
 
 /*
@@ -787,11 +852,19 @@ BG_SetBehaviorForSurvival
 ============
 */
 void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
-	// Calculate step count: +0.1 per 5 waves
-	int steps = svParams.waveCount / 2;
-	if (steps > 5) steps = 5; // Cap at +0.5 max change
+	// Base scaling: +0.1 per wave after wave 1
+	int steps = (svParams.waveCount > 1) ? svParams.waveCount / 1 : 0;
+	if (steps > 5) steps = 5;
 
 	float delta = 0.1f * steps;
+
+	// Clamp delta to 0 for special enemies not yet eligible
+	if (characterNum == AICHAR_ELITEGUARD && svParams.waveCount < svParams.waveEg)
+		delta = 0.0f;
+	else if (characterNum == AICHAR_BLACKGUARD && svParams.waveCount < svParams.waveBg)
+		delta = 0.0f;
+	else if (characterNum == AICHAR_VENOM && svParams.waveCount < svParams.waveV)
+		delta = 0.0f;
 
 	float aimSkill     = 0.0f;
 	float aimAccuracy  = 0.0f;
@@ -800,7 +873,6 @@ void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
 	float reactionTime = 1.0f;
 
 	switch (characterNum) {
-
 		case AICHAR_SOLDIER:
 			aimSkill     = fminf(0.1f + delta, 0.5f);
 			aimAccuracy  = fminf(0.1f + delta, 0.5f);
@@ -819,12 +891,14 @@ void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
 
 		case AICHAR_BLACKGUARD:
 		case AICHAR_VENOM:
+		case AICHAR_PROTOSOLDIER:
 			aimSkill     = fminf(0.4f + delta, 0.7f);
 			aimAccuracy  = fminf(0.4f + delta, 0.7f);
 			attackSkill  = fminf(0.4f + delta, 0.7f);
 			aggression   = fminf(0.5f + delta, 1.0f);
 			reactionTime = fmaxf(1.0f - delta, 0.5f);
 			break;
+
 		case AICHAR_PARTISAN:
 			aimSkill     = 0.8f;
 			aimAccuracy  = 0.8f;
@@ -832,7 +906,9 @@ void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
 			aggression   = 0.8f;
 			reactionTime = 0.5f;
 			break;
+
 		case AICHAR_ZOMBIE_SURV:
+		case AICHAR_ZOMBIE_FLAME:
 		case AICHAR_WARZOMBIE:
 		case AICHAR_PRIEST:
 		case AICHAR_ZOMBIE_GHOST:
@@ -844,7 +920,7 @@ void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
 			break;
 
 		default:
-			// Other characters: do not modify
+			// Unhandled characters
 			return;
 	}
 
@@ -865,9 +941,6 @@ void AICast_CheckSurvivalProgression(gentity_t *attacker) {
         static char command_end[256];
         snprintf(command_end, sizeof(command_end), "mu_play %s 0\n", svParams.waveEndSound);
         trap_SendServerCommand(-1, command_end);
-
-        // Debug output
-        G_Printf("DEBUG: Wave end sound command sent: %s\n", command_end);
     }
 }
 
@@ -1189,6 +1262,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 				return qfalse;
 			}
 		}
+		else if (!Q_stricmp(token.string, "initialFlamersCount"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.initialFlamersCount))
+			{
+				PC_SourceError(handle, "expected initialFlamersCount value");
+				return qfalse;
+			}
+		}
 		else if (!Q_stricmp(token.string, "soldiersIncrease"))
 		{
 			if (!PC_Int_Parse(handle, &svParams.soldiersIncrease))
@@ -1258,6 +1339,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Int_Parse(handle, &svParams.priestsIncrease))
 			{
 				PC_SourceError(handle, "expected priestsIncrease value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "flamersIncrease"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.flamersIncrease))
+			{
+				PC_SourceError(handle, "expected flamersIncrease value");
 				return qfalse;
 			}
 		}
@@ -1332,6 +1421,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 				PC_SourceError(handle, "expected maxPriests value");
 				return qfalse;
 			}
+		}		
+		else if (!Q_stricmp(token.string, "maxFlamers"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.maxFlamers))
+			{
+				PC_SourceError(handle, "expected maxFlamers value");
+				return qfalse;
+			}
 		}
 		else if (!Q_stricmp(token.string, "waveEg"))
 		{
@@ -1386,6 +1483,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Int_Parse(handle, &svParams.wavePriests))
 			{
 				PC_SourceError(handle, "expected wavePriests value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "waveFlamers"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.waveFlamers))
+			{
+				PC_SourceError(handle, "expected waveFlamers value");
 				return qfalse;
 			}
 		}
@@ -1458,6 +1563,78 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Int_Parse(handle, &svParams.friendlySpawnTime))
 			{
 				PC_SourceError(handle, "expected friendlySpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "defaultSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.defaultSpawnTime))
+			{
+				PC_SourceError(handle, "expected defaultSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "egSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.egSpawnTime))
+			{
+				PC_SourceError(handle, "expected egSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "bgSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.bgSpawnTime))
+			{
+				PC_SourceError(handle, "expected bgSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "vSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.vSpawnTime))
+			{
+				PC_SourceError(handle, "expected vSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "protoSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.protoSpawnTime))
+			{
+				PC_SourceError(handle, "expected protoSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "warzSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.warzSpawnTime))
+			{
+				PC_SourceError(handle, "expected warzSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "ghostSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.ghostSpawnTime))
+			{
+				PC_SourceError(handle, "expected ghostSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "priestSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.priestSpawnTime))
+			{
+				PC_SourceError(handle, "expected priestSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "flamerSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.flamerSpawnTime))
+			{
+				PC_SourceError(handle, "expected flamerSpawnTime value");
 				return qfalse;
 			}
 		}

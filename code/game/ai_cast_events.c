@@ -126,7 +126,11 @@ void AICast_Pain( gentity_t *targ, gentity_t *attacker, int damage, vec3_t point
 
 	if (g_gametype.integer == GT_SURVIVAL)
 	{
-		Survival_AddPainScore(attacker, targ, damage);
+		// prevent scoring for fire damage
+		if (targ->lastPainMOD != MOD_FLAMETHROWER && targ->lastPainMOD != MOD_FLAMETRAP)
+		{
+			Survival_AddPainScore(attacker, targ, damage);
+		}
 	}
 
 	// process the event (turn to face the attacking direction? go into hide/retreat state?)
@@ -320,7 +324,7 @@ void AICast_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 	}
 
 	// Zombies are very fragile against highly explosives
-	if ( (self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST ) && damage > 20 && inflictor != attacker ) {
+	if ( (self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST || self->aiCharacter == AICHAR_ZOMBIE_FLAME ) && damage > 20 && inflictor != attacker ) {
 		self->health = -999;
 		damage = 999;
 	}

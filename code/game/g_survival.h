@@ -90,8 +90,20 @@ typedef struct svParams_s
 	int initialGhostsCount;
 	int initialPriestsCount;
 	int initialPartisansCount;
+	int initialFlamersCount;
 
-    int   friendlySpawnTime;
+    int   defaultSpawnTime;
+	int   egSpawnTime;
+	int   bgSpawnTime;
+	int   vSpawnTime;
+	int   protoSpawnTime;
+
+	int   warzSpawnTime;
+	int   ghostSpawnTime;
+	int   priestSpawnTime;
+	int   flamerSpawnTime;
+
+	int   friendlySpawnTime;
 	int   aliveFriendliestoCallReinforce;
 
 	int soldiersIncrease;
@@ -103,6 +115,7 @@ typedef struct svParams_s
 	int protosIncrease;
 	int ghostsIncrease;
 	int priestsIncrease;
+	int flamersIncrease;
 
 	int maxSoldiers;
 	int maxEliteGuards;
@@ -114,6 +127,7 @@ typedef struct svParams_s
 	int maxProtos;
 	int maxGhosts;
 	int maxPriests;
+	int maxFlamers;
 
 	int waveEg;
 	int waveBg;
@@ -123,6 +137,7 @@ typedef struct svParams_s
 	int waveProtos;
 	int waveGhosts;
 	int wavePriests;
+	int waveFlamers;
 
 	int powerupDropChance;
 	int powerupDropChanceScavengerIncrease;
