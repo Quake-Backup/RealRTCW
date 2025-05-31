@@ -2248,6 +2248,7 @@ static void PM_BeginWeaponReload( int weapon ) {
 
 	switch ( weapon ) {
 	case WP_DYNAMITE:
+	case WP_DYNAMITE_ENG:
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
 		break;
@@ -2385,6 +2386,7 @@ void PM_BeginWeaponChange( int oldweapon, int newweapon, qboolean reload ) { //-
 		break;
 
 	case WP_DYNAMITE:
+	case WP_DYNAMITE_ENG:
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
 	case WP_POISONGAS:
@@ -3141,7 +3143,8 @@ static qboolean PM_CheckGrenade() {
 		pm->ps->weapon != WP_POISONGAS &&
 		pm->ps->weapon != WP_AIRSTRIKE &&
 		pm->ps->weapon != WP_KNIFE &&
-		pm->ps->weapon != WP_POISONGAS_MEDIC ) {
+		pm->ps->weapon != WP_POISONGAS_MEDIC &&
+	    pm->ps->weapon != WP_DYNAMITE_ENG ) {
 			return qfalse;
 		}
 
@@ -3157,7 +3160,7 @@ static qboolean PM_CheckGrenade() {
 		    } 
 			
 			// dynamite case
-		    else if ( pm->ps->weapon == WP_DYNAMITE ) {
+		    else if ( pm->ps->weapon == WP_DYNAMITE || pm->ps->weapon == WP_DYNAMITE_ENG ) {
 				pm->ps->grenadeTimeLeft += pml.msec;
 				
 				if ( pm->ps->grenadeTimeLeft > 8000 ) {
@@ -3196,7 +3199,7 @@ static qboolean PM_CheckGrenade() {
         } else if ( pm->ps->weapon != WP_KNIFE && !( pm->cmd.buttons & BUTTON_ATTACK )) {
                 if ( pm->ps->weaponDelay == ammoTable[pm->ps->weapon].fireDelayTime ) {
 				    
-					if ( pm->ps->weapon != WP_DYNAMITE ) {
+					if ( pm->ps->weapon != WP_DYNAMITE && pm->ps->weapon != WP_DYNAMITE_ENG ) {
 				        PM_StartWeaponAnim(WEAP_ATTACK2);
 					}
 
@@ -3590,6 +3593,12 @@ static void PM_Weapon( void ) {
 				return;
 			}
 		}
+
+	if ( pm->ps->weapon == WP_DYNAMITE_ENG ) {
+			if ( pm->cmd.serverTime - pm->ps->classWeaponTime < ( pm->engineerChargeTime ) ) {
+				return;
+			}
+		}
 	// check for fire
 	if ( (!(pm->cmd.buttons & BUTTON_ATTACK) && !PM_AltFire() && !delayedFire) 
 	    || (pm->ps->leanf != 0 && !PM_AltFiring(delayedFire) && pm->ps->weapon != WP_GRENADE_LAUNCHER && pm->ps->weapon != WP_GRENADE_PINEAPPLE && pm->ps->weapon != WP_POISONGAS) )
@@ -3627,7 +3636,7 @@ static void PM_Weapon( void ) {
 
 
 	// player is leaning - no fire
-	if ( pm->ps->leanf != 0 && pm->ps->weapon != WP_GRENADE_LAUNCHER && pm->ps->weapon != WP_GRENADE_PINEAPPLE && pm->ps->weapon != WP_DYNAMITE && pm->ps->weapon != WP_KNIFE ) {
+	if ( pm->ps->leanf != 0 && pm->ps->weapon != WP_GRENADE_LAUNCHER && pm->ps->weapon != WP_GRENADE_PINEAPPLE && pm->ps->weapon != WP_DYNAMITE && pm->ps->weapon != WP_DYNAMITE_ENG && pm->ps->weapon != WP_KNIFE ) {
 		return;
 	}
 
@@ -3731,31 +3740,31 @@ static void PM_Weapon( void ) {
 			}
 			break;
 	case WP_DYNAMITE:
+	case WP_DYNAMITE_ENG:
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
-	case WP_POISONGAS:
-		if ( !delayedFire ) {
-			if ( pm->ps->aiChar ) {
-				// ai characters go into their regular animation setup
-				BG_AnimScriptEvent( pm->ps, ANIM_ET_FIREWEAPON, qtrue, qtrue );
-			} else {
-				// the player pulls the fuse and holds the hot potato
-				if ( PM_WeaponAmmoAvailable( pm->ps->weapon ) ) {
-					if ( pm->ps->weapon == WP_DYNAMITE ) {
-						pm->ps->grenadeTimeLeft = 50;
-					} else {
-						// start at four seconds and count down
-						pm->ps->grenadeTimeLeft = 4000;
-					}
-					pm->ps->holdable[HI_KNIVES] = 0; // holding nade
-					PM_StartWeaponAnim( WEAP_ATTACK1 );
+case WP_POISONGAS:
+	if ( !delayedFire ) {
+		if ( pm->ps->aiChar ) {
+			// ai characters go into their regular animation setup
+			BG_AnimScriptEvent( pm->ps, ANIM_ET_FIREWEAPON, qtrue, qtrue );
+		} else {
+			// the player pulls the fuse and holds the hot potato
+			if ( pm->ps->weapon == WP_DYNAMITE_ENG || PM_WeaponAmmoAvailable( pm->ps->weapon ) ) {
+				if ( pm->ps->weapon == WP_DYNAMITE || pm->ps->weapon == WP_DYNAMITE_ENG ) {
+					pm->ps->grenadeTimeLeft = 50;
+				} else {
+					// start at four seconds and count down
+					pm->ps->grenadeTimeLeft = 4000;
 				}
+				pm->ps->holdable[HI_KNIVES] = 0; // holding nade
+				PM_StartWeaponAnim( WEAP_ATTACK1 );
 			}
-
-			pm->ps->weaponDelay = ammoTable[pm->ps->weapon].fireDelayTime;
-
 		}
-		break;
+
+		pm->ps->weaponDelay = ammoTable[pm->ps->weapon].fireDelayTime;
+	}
+	break;
 	}
 
 	if ( PM_AltFiring(delayedFire) || PM_AltFire() )
@@ -3801,6 +3810,7 @@ static void PM_Weapon( void ) {
 			// Ridah, only play if using a triggered weapon
 			case WP_MONSTER_ATTACK1:
 			case WP_DYNAMITE:
+			case WP_DYNAMITE_ENG:
 			case WP_GRENADE_LAUNCHER:
 			case WP_GRENADE_PINEAPPLE:
 			case WP_POISONGAS:
@@ -3855,8 +3865,8 @@ static void PM_Weapon( void ) {
 	// fire weapon
 
 	// add weapon heat
-	// except for engineers, they don't have to worry about it
-	if (pm->ps->stats[STAT_PLAYER_CLASS] != PC_ENGINEER)
+	// except for rifling perk
+	if (!pm->ps->perks[PERK_RIFLING])
 	{
 		if (ammoTable[pm->ps->weapon].maxHeat)
 		{
@@ -3898,6 +3908,7 @@ static void PM_Weapon( void ) {
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
 	case WP_DYNAMITE:
+	case WP_DYNAMITE_ENG:
 	case WP_M97:
 	case WP_AUTO5:
     case WP_M7:
@@ -3933,7 +3944,7 @@ static void PM_Weapon( void ) {
 		break;
 	}
 
-		if ( pm->ps->weapon == WP_AIRSTRIKE || pm->ps->weapon == WP_POISONGAS_MEDIC ) { 
+		if ( pm->ps->weapon == WP_AIRSTRIKE || pm->ps->weapon == WP_POISONGAS_MEDIC || pm->ps->weapon == WP_DYNAMITE_ENG ) { 
 			PM_AddEvent( EV_NOAMMO );
 		}
 
@@ -4782,7 +4793,7 @@ void PmoveSingle( pmove_t *pmove ) {
 			}
 
 			// don't allow binocs if in the middle of throwing grenade
-			if ( ( pm->ps->weapon == WP_GRENADE_LAUNCHER || pm->ps->weapon == WP_GRENADE_PINEAPPLE || pm->ps->weapon == WP_DYNAMITE || pm->ps->weapon == WP_POISONGAS ) && pm->ps->grenadeTimeLeft > 0 ) {
+			if ( ( pm->ps->weapon == WP_GRENADE_LAUNCHER || pm->ps->weapon == WP_GRENADE_PINEAPPLE || pm->ps->weapon == WP_DYNAMITE || pm->ps->weapon == WP_DYNAMITE_ENG || pm->ps->weapon == WP_POISONGAS ) && pm->ps->grenadeTimeLeft > 0 ) {
 				pm->ps->eFlags &= ~EF_ZOOMING;
 			}
 		}
