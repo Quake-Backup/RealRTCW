@@ -803,8 +803,8 @@ void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs) {
 			break;
 
 		case AICHAR_PROTOSOLDIER:
-			newHealth = 250 + steps * 5;
-			if (newHealth > 600) newHealth = 600;
+			newHealth = 500 + steps * 5;
+			if (newHealth > 800) newHealth = 800;
 			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
 			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 1.5f);
 			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
@@ -937,6 +937,17 @@ void AICast_CheckSurvivalProgression(gentity_t *attacker) {
         svParams.wavePending = qtrue;
         svParams.waveChangeTime = level.time + svParams.intermissionTime * 1000;
 
+
+		if ((svParams.waveCount == 4) && (!g_cheats.integer) && (!attacker->client->hasPurchased))
+		{
+			steamSetAchievement("ACH_NO_BUY");
+		}
+
+		if ((svParams.waveCount == 9) && (!g_cheats.integer) && (attacker->client->ps.stats[STAT_PLAYER_CLASS] == PC_NONE))
+		{
+			steamSetAchievement("ACH_NO_CLASS");
+		}
+
         // Play the wave end sound from the configuration file
         static char command_end[256];
         snprintf(command_end, sizeof(command_end), "mu_play %s 0\n", svParams.waveEndSound);
@@ -975,16 +986,6 @@ void AICast_TickSurvivalWave(void) {
         if (!cl->inuse || !cl->client) continue;
 
         cl->client->ps.persistant[PERS_WAVES]++;
-
-        // Achievements
-        if (svParams.waveCount == 10 && !g_cheats.integer && !cl->client->hasPurchased) {
-            steamSetAchievement("ACH_NO_BUY");
-        }
-
-        if (svParams.waveCount == 15 && !g_cheats.integer &&
-            cl->client->ps.stats[STAT_PLAYER_CLASS] == PC_NONE) {
-            steamSetAchievement("ACH_NO_CLASS");
-        }
     }
 
     // Play the wave start sound from the configuration file
@@ -2037,7 +2038,22 @@ qboolean BG_ParseSurvivalTable(int handle)
 				PC_SourceError(handle, "expected intermissionTime value");
 				return qfalse;
 			}
-			// string
+		}
+		else if (!Q_stricmp(token.string, "soldierExplosiveDmgBonus"))
+		{
+			if (!PC_Float_Parse(handle, &svParams.soldierExplosiveDmgBonus))
+			{
+				PC_SourceError(handle, "expected soldierExplosiveDmgBonus value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "ltAmmoBonus"))
+		{
+			if (!PC_Float_Parse(handle, &svParams.ltAmmoBonus))
+			{
+				PC_SourceError(handle, "expected ltAmmoBonus value");
+				return qfalse;
+			}
 		}
 		else if (!Q_stricmp(token.string, "waveStartSound"))
 		{
