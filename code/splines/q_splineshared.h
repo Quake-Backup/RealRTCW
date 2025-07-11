@@ -1533,6 +1533,8 @@ typedef struct playerState_s {
 	// Jaybird - Shotgun
 	qboolean	m97reloadInterrupt;
 
+	int weaponUpgraded[MAX_WEAPONS]; // 0 = not upgraded, 1 = upgraded
+
 } playerState_t;
 
 

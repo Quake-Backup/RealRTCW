@@ -4071,7 +4071,6 @@ case WP_POISONGAS:
 	if ( pm->ps->perks[PERK_RIFLING] ) {
 		addTime /= 1.25;
 	}
-	
 
 	// add the recoil amount to the aimSpreadScale
 //	pm->ps->aimSpreadScale += 3.0*aimSpreadScaleAdd;

@@ -1606,6 +1606,12 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		if ( weapon == WP_SNIPERRIFLE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_MAUSER );
 		}
+		if ( weapon == WP_M7 ) {
+			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_M1GARAND );
+		}
+		if ( weapon == WP_M1GARAND ) {
+			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_M7 );
+		}
 		if ( weapon == WP_DELISLESCOPE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_DELISLE );
 		}
@@ -1895,6 +1901,12 @@ if ( !Q_strcasecmp (params, "soviet_random") )
         }
 		if ( weapon == WP_SNIPERRIFLE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_MAUSER );
+		}
+		if ( weapon == WP_M7 ) {
+			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_M1GARAND );
+		}
+		if ( weapon == WP_M1GARAND ) {
+			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_M7 );
 		}
 		if ( weapon == WP_DELISLESCOPE ) {
 			COM_BitSet( g_entities[cs->entityNum].client->ps.weapons, WP_DELISLE );
@@ -6163,9 +6175,11 @@ qboolean AICast_ScriptAction_MusicQueue( cast_state_t *cs, char *params ) {
     }
 
     if (fileCount == 1) {
+		trap_SetConfigstring(CS_MUSIC_QUEUE, ""); // force flush
         trap_SetConfigstring(CS_MUSIC_QUEUE, cvarNameArray[0]);
     } else {
         int randomIndex = rand() % fileCount;
+		trap_SetConfigstring(CS_MUSIC_QUEUE, ""); // force flush
         trap_SetConfigstring(CS_MUSIC_QUEUE, cvarNameArray[randomIndex]);
     }
 
