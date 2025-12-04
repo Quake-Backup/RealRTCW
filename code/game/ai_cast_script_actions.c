@@ -1153,8 +1153,6 @@ qboolean AICast_ScriptAction_SetClip( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
-
-
 /*
 ==============
 AICast_ScriptAction_SuggestWeapon
@@ -1465,8 +1463,8 @@ qboolean AICast_ScriptAction_IncreaseRespawns(cast_state_t *cs, char *params) {
     }
 
     // Optional: Print debug information
-    G_Printf("AI '%s' respawnsleft increased by %d. New value: %d\n",
-             aiName, amount, targetCs->respawnsleft);
+    //G_Printf("AI '%s' respawnsleft increased by %d. New value: %d\n",
+           //  aiName, amount, targetCs->respawnsleft);
 
     return qtrue;
 }
@@ -1576,7 +1574,7 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		{
 			if (g_newinventory.integer > 0 || g_gametype.integer == GT_SURVIVAL)
 			{
-				if (weapon != WP_AIRSTRIKE && weapon != WP_ARTY && weapon != WP_POISONGAS_MEDIC & weapon != WP_DYNAMITE_ENG) // Skip WP_AIRSTRIKE and WP_ARTY	
+				if (weapon != WP_AIRSTRIKE && weapon != WP_ARTY && weapon != WP_POISONGAS_MEDIC && weapon != WP_DYNAMITE_ENG) // Skip WP_AIRSTRIKE and WP_ARTY	
 				{
 					if (ent->client->ps.stats[STAT_PLAYER_CLASS] == PC_SOLDIER)
 					{
@@ -1916,8 +1914,8 @@ if ( !Q_strcasecmp (params, "soviet_random") )
 		}
 //----(SA)	end
 
-        // giveweaponfull gives you max ammo and fills your clip for all weapons
-		g_entities[cs->entityNum].client->ps.ammo[BG_FindAmmoForWeapon( weapon )] = 999;
+		// giveweaponfull gives you max ammo and fills your clip for all weapons
+        g_entities[cs->entityNum].client->ps.ammo[BG_FindAmmoForWeapon( weapon )] = 999;
 		Fill_Clip( &g_entities[cs->entityNum].client->ps, weapon );
 		// and also selects this weapon
 		if ( cs->bs ) {
@@ -2241,24 +2239,32 @@ qboolean AICast_ScriptAction_Movetype( cast_state_t *cs, char *params ) {
 
 /*
 =================
-AICast_ScriptAction_AlertEntity
+AICAction_AlertEntity
 
   syntax: alertentity <targetname>
+  Now NON-FATAL — prints warning once and continues
 =================
 */
 qboolean AICast_ScriptAction_AlertEntity( cast_state_t *cs, char *params ) {
 	gentity_t   *ent;
 
 	if ( !params || !params[0] ) {
-		G_Error( "AI Scripting: alertentity without targetname\n" );
+		G_Printf( S_COLOR_YELLOW "AI Scripting: alertentity without targetname (entity %d)\n", cs->entityNum );
+		return qfalse;
 	}
 
 	// find this targetname
 	ent = G_Find( NULL, FOFS( targetname ), params );
 	if ( !ent ) {
-		ent = G_Find( NULL, FOFS( aiName ), params ); // look for an AI
-		if ( !ent || !ent->client ) { // accept only AI for aiName check
-			G_Error( "AI Scripting: alertentity cannot find targetname \"%s\"\n", params );
+		ent = G_Find( NULL, FOFS( aiName ), params );
+		if ( !ent || !ent->client ) {
+			// Only warn ONCE per map to prevent spam
+			static char lastMissing[64] = {0};
+			if ( Q_strncmp( lastMissing, params, sizeof(lastMissing)-1 ) ) {
+				Q_strncpyz( lastMissing, params, sizeof(lastMissing) );
+				G_Printf( S_COLOR_YELLOW "AI Scripting: alertentity cannot find \"%s\"\n", params );
+			}
+			return qfalse;  // don't break the script chain
 		}
 	}
 
@@ -2269,15 +2275,19 @@ qboolean AICast_ScriptAction_AlertEntity( cast_state_t *cs, char *params ) {
 			return qtrue;
 		}
 
-		if ( aicast_debug.integer ) {
-			G_Printf( "AI Scripting: alertentity \"%s\" (classname = %s) doesn't have an \"AIScript_AlertEntity\" function\n", params, ent->classname );
+		// Only warn once per entity type
+		static char lastBad[128] = {0};
+		char temp[128];
+		Com_sprintf( temp, sizeof(temp), "%s:%s", params, ent->classname );
+		if ( Q_strncmp( lastBad, temp, sizeof(lastBad)-1 ) ) {
+			Q_strncpyz( lastBad, temp, sizeof(lastBad) );
+			G_Printf( S_COLOR_YELLOW "AI Scripting: alertentity \"%s\" (classname = %s) has no AlertEntity function\n",
+			          params, ent->classname );
 		}
-		//G_Error( "AI Scripting: alertentity \"%s\" (classname = %s) doesn't have an \"AIScript_AlertEntity\" function\n", params, ent->classname );
 		return qtrue;
 	}
 
 	ent->AIScript_AlertEntity( ent );
-
 	return qtrue;
 }
 
@@ -2613,8 +2623,6 @@ qboolean AICast_ScriptAction_ChangeAiSkin(cast_state_t *cs, char *params)
 	trap_SetUserinfo(ent->s.number, userinfo);
 	ClientUserinfoChanged(ent->s.number);
 
-	G_Printf("AI Script: Changed skin of %s to '%s'\n", ent->aiName, params);
-
 	return qtrue;
 }
 
@@ -2637,8 +2645,6 @@ qboolean AICast_ScriptAction_ChangeAiHead(cast_state_t* cs, char* params)
 	Info_SetValueForKey(userinfo, "head", params);
 	trap_SetUserinfo(ent->s.number, userinfo);
 	ClientUserinfoChanged(ent->s.number);
-
-	G_Printf("AI Script: Changed head of %s to '%s'\n", ent->aiName, params);
 
 	return qtrue;
 }
@@ -6175,11 +6181,9 @@ qboolean AICast_ScriptAction_MusicQueue( cast_state_t *cs, char *params ) {
     }
 
     if (fileCount == 1) {
-		trap_SetConfigstring(CS_MUSIC_QUEUE, ""); // force flush
         trap_SetConfigstring(CS_MUSIC_QUEUE, cvarNameArray[0]);
     } else {
         int randomIndex = rand() % fileCount;
-		trap_SetConfigstring(CS_MUSIC_QUEUE, ""); // force flush
         trap_SetConfigstring(CS_MUSIC_QUEUE, cvarNameArray[randomIndex]);
     }
 

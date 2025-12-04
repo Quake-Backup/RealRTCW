@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 
+#include <stdbool.h>
 #include "l_cmd.h"
 #include "l_math.h"
 #include "l_mem.h"
@@ -447,8 +448,8 @@ void    Q1_LoadBSPFile( char *filename, int offset, int length ) {
 
 //============================================================================
 
-FILE *q1_wadfile;
-q1_dheader_t q1_outheader;
+static FILE *q1_wadfile;
+static q1_dheader_t q1_outheader;
 
 void Q1_AddLump( int lumpnum, void *data, int len ) {
 	q1_lump_t *lump;

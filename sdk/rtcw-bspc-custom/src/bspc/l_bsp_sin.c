@@ -27,6 +27,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 
+#include <stdbool.h>
 #include "l_cmd.h"
 #include "l_math.h"
 #include "l_mem.h"
@@ -781,7 +782,7 @@ void Sin_SwapBSPFile( qboolean todisk ) {
 } //end of the function Sin_SwapBSPFile
 
 
-sin_dheader_t   *header;
+static sin_dheader_t   *header;
 #ifdef SIN
 int Sin_CopyLump( int lump, void *dest, int size, int maxsize ) {
 	int length, ofs;
@@ -943,8 +944,8 @@ void    Sin_LoadBSPFileTexinfo( char *filename ) {
 
 //============================================================================
 
-FILE        *wadfile;
-sin_dheader_t outheader;
+static FILE        *wadfile;
+static sin_dheader_t outheader;
 
 #ifdef SIN
 void Sin_AddLump( int lumpnum, void *data, int len, int size, int maxsize ) {

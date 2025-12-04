@@ -688,13 +688,16 @@ int G_GetWeaponDamage(int weapon, gentity_t *ent) {
 	qboolean isPlayer = ent->client && !ent->aiCharacter;
 
 	const ammoTable_t *wt = GetWeaponTableData(weapon);
-	int baseDamage = isPlayer ? wt->playerDamage : wt->aiDamage;
 
-	if (isPlayer && ent->client->ps.weaponUpgraded[weapon]) {
-		baseDamage *= svParams.upgradeDamageMultiplier; 
+	if (isPlayer) {
+		if (ent->client->ps.weaponUpgraded[weapon]) {
+			return wt->playerDamageUpgraded;
+		} else {
+			return wt->playerDamage;
+		}
+	} else {
+		return wt->aiDamage;
 	}
-
-	return baseDamage;
 }
 
 float G_GetWeaponSpread(int weapon, gentity_t *ent) {
@@ -702,13 +705,12 @@ float G_GetWeaponSpread(int weapon, gentity_t *ent) {
 		return 0.0f;
 
 	const ammoTable_t *wt = GetWeaponTableData(weapon);
-	float spread = wt->spread;
 
 	if (ent && ent->client && ent->client->ps.weaponUpgraded[weapon]) {
-		spread *= svParams.upgradeSpreadReduceMultiplier; 
+		return wt->spreadUpgraded;
 	}
 
-	return spread;
+	return wt->spread;
 }
 
 /*
@@ -784,63 +786,6 @@ void Bullet_Endpos( gentity_t *ent, float spread, vec3_t *end ) {
 		VectorMA( *end, u, up, *end );
 	}
 }
-/*
-==============
-RayIntersectsAABB
-	Check if a ray intersects an axis-aligned bounding box (AABB).
-	Returns qtrue if it does, qfalse otherwise.
-	Uses the ray start and direction, and the box's minimum and maximum coordinates.
-	This is useful for collision detection in 3D space.
-==============
-*/
-qboolean RayIntersectsAABB(vec3_t rayStart, vec3_t rayDir, vec3_t boxMins, vec3_t boxMaxs) {
-	float tmin = -INFINITY;
-	float tmax = INFINITY;
-
-	for (int i = 0; i < 3; i++) {
-		if (rayDir[i] != 0.0f) {
-			float t1 = (boxMins[i] - rayStart[i]) / rayDir[i];
-			float t2 = (boxMaxs[i] - rayStart[i]) / rayDir[i];
-
-			if (t1 > t2) {
-				float temp = t1;
-				t1 = t2;
-				t2 = temp;
-			}
-
-			if (t1 > tmin) tmin = t1;
-			if (t2 < tmax) tmax = t2;
-
-			if (tmin > tmax) {
-				return qfalse; // no intersection
-			}
-		} else if (rayStart[i] < boxMins[i] || rayStart[i] > boxMaxs[i]) {
-			return qfalse; // ray is parallel and outside the slab
-		}
-	}
-
-	return qtrue; // intersection occurs
-}
-
-/*
-==============
-RayIntersectsEntityBBox
-	Check if a ray intersects the bounding box of an entity.
-	Returns qtrue if it does, qfalse otherwise.
-	Uses the ray start and direction, and the entity's bounding box.
-	This is useful for checking if a bullet or other ray-based attack hits an entity.
-==============
-*/
-qboolean RayIntersectsEntityBBox(vec3_t rayStart, vec3_t rayDir, gentity_t *ent) {
-	vec3_t mins, maxs;
-	vec3_t origin;
-
-	VectorCopy(ent->r.currentOrigin, origin);
-	VectorAdd(origin, ent->r.mins, mins);
-	VectorAdd(origin, ent->r.maxs, maxs);
-
-	return RayIntersectsAABB(rayStart, rayDir, mins, maxs);
-}
 
 /*
 ==============
@@ -873,16 +818,45 @@ qboolean Bullet_Fire_Extended( gentity_t *source, gentity_t *attacker, vec3_t st
     int baseDamage = damage;
     int effectiveDamage = ( recursion == 0 ? baseDamage * s_quadFactor : baseDamage );
 
-    // RF, abort if too many recursions.. there must be a real solution for this, but for now this is the safest
+	qboolean explosiveRounds = qfalse;
+
+	switch (attacker->s.weapon)
+	{
+	case WP_REVOLVER:
+	case WP_MOSIN:
+	case WP_MAUSER:
+	case WP_SNIPERRIFLE:
+	case WP_DELISLE:
+	case WP_DELISLESCOPE:
+		if (attacker->client->ps.weaponUpgraded[attacker->s.weapon])
+		{
+			explosiveRounds = qtrue;
+		}
+		break;
+	default:
+		break;
+	}
+
+	// RF, abort if too many recursions.. there must be a real solution for this, but for now this is the safest
     // fix I can find
     if ( recursion > 12 ) {
         return qfalse;
     }
 
-    // perform trace with base values (the trace doesn't care about the damage multiplier)
-    trap_Trace( &tr, start, NULL, NULL, end, source->s.number, MASK_SHOT );
+	// perform trace with base values (the trace doesn't care about the damage multiplier)
+	if (g_gametype.integer == GT_SURVIVAL)
+	{
+		vec3_t mins = {-3, -3, -3};
+		vec3_t maxs = {3, 3, 3};
+		trap_Trace(&tr, start, mins, maxs, end, source->s.number, MASK_SHOT);
+	}
+	else
+	{
 
-    // DHM - Nerve :: only in single player
+		trap_Trace(&tr, start, NULL, NULL, end, source->s.number, MASK_SHOT);
+	}
+
+	// DHM - Nerve :: only in single player
     AICast_ProcessBullet( attacker, start, tr.endpos );
     
     // bullet debugging using Q3A's railtrail
@@ -1022,7 +996,12 @@ qboolean Bullet_Fire_Extended( gentity_t *source, gentity_t *attacker, vec3_t st
 
             G_DamageExt( traceEnt, attacker, attacker, forward, tr.endpos, effectiveDamage, ( g_weaponfalloff.integer ? DAMAGE_DISTANCEFALLOFF : 0 ), ammoTable[attacker->s.weapon].mod, &hitType );
 
-            // allow bullets to "pass through" func_explosives if they break by taking another simultaneous shot
+			if (explosiveRounds)
+			{
+				G_RadiusDamage(tr.endpos, attacker, 50, 100, NULL, MOD_MACHINEGUN);
+			}
+
+			// allow bullets to "pass through" func_explosives if they break by taking another simultaneous shot
             if ( Q_stricmp( traceEnt->classname, "func_explosive" ) == 0 ) {
                 if ( traceEnt->health <= 0 ) {
                     Bullet_Fire_Extended( traceEnt, attacker, tr.endpos, end, 0, effectiveDamage, recursion + 1 );
@@ -1035,34 +1014,7 @@ qboolean Bullet_Fire_Extended( gentity_t *source, gentity_t *attacker, vec3_t st
         }
     }
 
-	// This allows bullets to hit multiple AI in Survival because we have collisions disabled there
-	if (g_gametype.integer == GT_SURVIVAL)
-	{
-		vec3_t shotDir;
-		VectorSubtract(end, start, shotDir);
-		VectorNormalize(shotDir);
-
-		for (int i = 0; i < level.num_entities; i++)
-		{
-			gentity_t *testEnt = &g_entities[i];
-
-			if (!testEnt->inuse || testEnt == traceEnt || testEnt == attacker)
-				continue;
-
-			if (!(testEnt->r.svFlags & SVF_CASTAI))
-				continue;
-
-			if (testEnt->health <= 0 || !testEnt->takedamage)
-				continue;
-
-			if (RayIntersectsEntityBBox(start, shotDir, testEnt))
-			{
-				G_DamageExt(testEnt, attacker, attacker, shotDir, testEnt->r.currentOrigin, effectiveDamage, 0, MOD_MACHINEGUN, NULL);
-			}
-		}
-	}
-
-	tent = G_TempEntity( tr.endpos, EV_HITSOUNDS );
+    tent = G_TempEntity( tr.endpos, EV_HITSOUNDS );
     tent->s.eventParm = traceEnt->s.number;
     tent->s.weapon = traceEnt->s.weapon;
     tent->s.otherEntityNum = attacker->s.number;
@@ -1518,7 +1470,7 @@ void ThrowKnife( gentity_t *ent )
 	knife->r.svFlags            = SVF_USE_CURRENT_ORIGIN | SVF_BROADCAST;
 
 	// usage
-	knife->touch				= Touch_Item;
+	knife->touch				= Touch_Item;	// no auto-pickup, only activate
 	knife->use					= Use_Item;
 
 	// damage
@@ -1546,8 +1498,6 @@ void ThrowKnife( gentity_t *ent )
 	// NQ physics
 	knife->physicsSlide			= qfalse;
 	knife->physicsFlush			= qtrue;
-
-	knife->active = qtrue;
 
 	// bounding box
 	VectorSet( knife->r.mins, -ITEM_RADIUS, -ITEM_RADIUS, 0 );
@@ -2005,13 +1955,43 @@ void FireWeapon( gentity_t *ent ) {
 		Bullet_Fire(ent, G_GetWeaponSpread(WP_FG42, ent) * aimSpreadScale, G_GetWeaponDamage(WP_FG42, ent));
 		break;
 	case WP_STEN:
-		Bullet_Fire(ent, G_GetWeaponSpread(WP_STEN, ent) * aimSpreadScale, G_GetWeaponDamage(WP_STEN, ent));
+		if (ent->client->ps.weaponUpgraded[WP_STEN])
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				Bullet_Fire(ent, G_GetWeaponSpread(WP_STEN, ent) * aimSpreadScale, G_GetWeaponDamage(WP_STEN, ent));
+			}
+		}
+		else
+		{
+			Bullet_Fire(ent, G_GetWeaponSpread(WP_STEN, ent) * aimSpreadScale, G_GetWeaponDamage(WP_STEN, ent));
+		}
 		break;
 	case WP_MP40:
-		Bullet_Fire(ent, G_GetWeaponSpread(WP_MP40, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MP40, ent));
+		if (ent->client->ps.weaponUpgraded[WP_MP40])
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				Bullet_Fire(ent, G_GetWeaponSpread(WP_MP40, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MP40, ent));
+			}
+		}
+		else
+		{
+			Bullet_Fire(ent, G_GetWeaponSpread(WP_MP40, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MP40, ent));
+		}
 		break;
 	case WP_MP34: 
-		Bullet_Fire(ent, G_GetWeaponSpread(WP_MP34, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MP34, ent));
+		if (ent->client->ps.weaponUpgraded[WP_MP34])
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				Bullet_Fire(ent, G_GetWeaponSpread(WP_MP34, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MP34, ent));
+			}
+		}
+		else
+		{
+			Bullet_Fire(ent, G_GetWeaponSpread(WP_MP34, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MP34, ent));
+		}
 		break;
 	case WP_TT33:
 	case WP_DUAL_TT33:
@@ -2021,10 +2001,30 @@ void FireWeapon( gentity_t *ent ) {
 		Bullet_Fire(ent, G_GetWeaponSpread(WP_HDM, ent) * aimSpreadScale, G_GetWeaponDamage(WP_HDM, ent));
 		break;
 	case WP_REVOLVER:
-		Bullet_Fire(ent, G_GetWeaponSpread(WP_REVOLVER, ent) * aimSpreadScale, G_GetWeaponDamage(WP_REVOLVER, ent));
+		if (ent->client->ps.weaponUpgraded[WP_REVOLVER])
+		{
+			for (int i = 0; i < 6; i++)
+			{
+				Bullet_Fire(ent, G_GetWeaponSpread(WP_REVOLVER, ent) * aimSpreadScale, G_GetWeaponDamage(WP_REVOLVER, ent));
+			}
+		}
+		else
+		{
+			Bullet_Fire(ent, G_GetWeaponSpread(WP_REVOLVER, ent) * aimSpreadScale, G_GetWeaponDamage(WP_REVOLVER, ent));
+		}
 		break;
 	case WP_PPSH: 
-		Bullet_Fire(ent, G_GetWeaponSpread(WP_PPSH, ent) * aimSpreadScale, G_GetWeaponDamage(WP_PPSH, ent));
+		if (ent->client->ps.weaponUpgraded[WP_PPSH])
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				Bullet_Fire(ent, G_GetWeaponSpread(WP_PPSH, ent) * aimSpreadScale, G_GetWeaponDamage(WP_PPSH, ent));
+			}
+		}
+		else
+		{
+			Bullet_Fire(ent, G_GetWeaponSpread(WP_PPSH, ent) * aimSpreadScale, G_GetWeaponDamage(WP_PPSH, ent));
+		}
 		break;
 	case WP_MOSIN: 
 		Bullet_Fire(ent, G_GetWeaponSpread(WP_MOSIN, ent) * aimSpreadScale, G_GetWeaponDamage(WP_MOSIN, ent));
@@ -2135,10 +2135,30 @@ void FireWeapon( gentity_t *ent ) {
 	
 
 	case WP_THOMPSON:
-		Bullet_Fire(ent, G_GetWeaponSpread(WP_THOMPSON, ent) * aimSpreadScale, G_GetWeaponDamage(WP_THOMPSON, ent));
+		if (ent->client->ps.weaponUpgraded[WP_THOMPSON])
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				Bullet_Fire(ent, G_GetWeaponSpread(WP_THOMPSON, ent) * aimSpreadScale, G_GetWeaponDamage(WP_THOMPSON, ent));
+			}
+		}
+		else
+		{
+			Bullet_Fire(ent, G_GetWeaponSpread(WP_THOMPSON, ent) * aimSpreadScale, G_GetWeaponDamage(WP_THOMPSON, ent));
+		}
 		break;
 	case WP_PANZERFAUST:
-		Weapon_RocketLauncher_Fire( ent, aimSpreadScale );
+		if (ent->client->ps.weaponUpgraded[WP_PANZERFAUST])
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				Weapon_RocketLauncher_Fire(ent, aimSpreadScale);
+			}
+		}
+		else
+		{
+			Weapon_RocketLauncher_Fire(ent, aimSpreadScale);
+		}
 		break;
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:

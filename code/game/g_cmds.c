@@ -1233,17 +1233,16 @@ void Cmd_StopCamera_f( gentity_t *ent ) {
 		ent->s.eFlags &= ~EF_VIEWING_CAMERA;
 		ent->client->ps.eFlags &= ~EF_VIEWING_CAMERA;
 
-// (SA) trying this in client to avoid 1 frame of player drawing
-//		ent->s.eFlags &= ~EF_NODRAW;
-//		ent->client->ps.eFlags &= ~EF_NODRAW;
-
-		// RF, if we are near the spawn point, save the "current" game, for reloading after death
 		sp = NULL;
-		// gcc: suggests () around assignment used as truth value
-		while ( ( sp = G_Find( sp, FOFS( classname ), "info_player_deathmatch" ) ) ) { // info_player_start becomes info_player_deathmatch in it's spawn functon
+		while ( ( sp = G_Find( sp, FOFS( classname ), "info_player_deathmatch" ) ) ) {
 			if ( Distance( ent->s.pos.trBase, sp->s.origin ) < 256 && trap_InPVS( ent->s.pos.trBase, sp->s.origin ) ) {
-				G_SaveGame( NULL );
-				G_SaveGame( "lastcheckpoint" );
+
+				// Don't save checkpoint in Survival mode
+				if ( g_gametype.integer != GT_SURVIVAL ) {
+					G_SaveGame( NULL );
+					G_SaveGame( "lastcheckpoint" );
+				}
+
 				break;
 			}
 		}
@@ -1766,6 +1765,7 @@ void ClientDamage( gentity_t *clent, int entnum, int enemynum, int id ) {
 			(ent->aiCharacter == AICHAR_SUPERSOLDIER) ||
 			(ent->aiCharacter == AICHAR_SUPERSOLDIER_LAB) ||
 			(ent->aiCharacter == AICHAR_LOPER) ||
+			(ent->aiCharacter == AICHAR_LOPER_SPECIAL) ||
 			(ent->aiCharacter == AICHAR_PRIEST))
 		{
 			break;
@@ -1779,12 +1779,58 @@ void ClientDamage( gentity_t *clent, int entnum, int enemynum, int id ) {
 			if (!(enemy->r.svFlags & SVF_CASTAI))
 			{
 				// Player Tesla damage — apply upgrade multiplier if upgraded
-				int dmg = ammoTable[WP_TESLA].playerDamage;
+				int dmg;
 				if (enemy->client && enemy->client->ps.weaponUpgraded[WP_TESLA])
 				{
-					dmg *= svParams.upgradeDamageMultiplier;
+					dmg = ammoTable[WP_TESLA].playerDamageUpgraded;
+				}
+				else
+				{
+					dmg = ammoTable[WP_TESLA].playerDamage;
 				}
 				G_Damage(ent, enemy, enemy, vec, ent->r.currentOrigin, dmg, 0, MOD_LIGHTNING);
+					// If Tesla is upgraded, apply burn effect like flamethrower
+				if (enemy->client && enemy->client->ps.weaponUpgraded[WP_TESLA])
+				{
+#define TESLA_BURN_THRESHOLD 5 // minimal threshold to trigger burning
+
+					int flameQuota = ammoTable[WP_TESLA].playerDamage; // or some static flame damage
+
+					// reduce existing flameQuota over time
+					if (ent->flameQuotaTime && ent->flameQuota > 0)
+					{
+						ent->flameQuota -= (int)(((float)(level.time - ent->flameQuotaTime) / 1000.f) * (float)flameQuota / 2.0f);
+						if (ent->flameQuota < 0)
+						{
+							ent->flameQuota = 0;
+						}
+					}
+
+					// add new flame damage
+					ent->flameQuota += flameQuota;
+					ent->flameQuotaTime = level.time;
+
+					if (ent->client && (ent->health <= 0 || ent->flameQuota > TESLA_BURN_THRESHOLD))
+					{
+						if (ent->s.onFireEnd < level.time)
+						{
+							ent->s.onFireStart = level.time;
+						}
+
+						// Duration of burn (match flamethrower)
+						if (ent->r.svFlags & SVF_CASTAI)
+						{
+							ent->s.onFireEnd = level.time + 6000;
+						}
+						else
+						{
+							ent->s.onFireEnd = level.time + FIRE_FLASH_TIME;
+						}
+
+						ent->flameBurnEnt = enemy->s.number;
+						ent->client->ps.onFireStart = level.time;
+					}
+				}
 			}
 			else
 			{
@@ -1843,6 +1889,17 @@ void ClientDamage( gentity_t *clent, int entnum, int enemynum, int id ) {
 		break;
 	case CLDMG_FLAMETHROWER:
 
+		if (ent->client && ent->client->ps.powerups[PW_BATTLESUIT_SURV])
+		{
+			break; // Don't apply flamethrower effects
+		}
+
+		// Skip flame effects for dead entities in Survival mode
+		if (g_gametype.integer == GT_SURVIVAL && ent->client && ent->health <= 0)
+		{
+			break;
+		}
+
 		if ( ent->takedamage && !AICast_NoFlameDamage( ent->s.number ) ) {
 			#define FLAME_THRESHOLD 10
 
@@ -1850,12 +1907,13 @@ void ClientDamage( gentity_t *clent, int entnum, int enemynum, int id ) {
 
 			if (!(enemy->r.svFlags & SVF_CASTAI))
 			{
-				// Player attacker
-				damage = ammoTable[WP_FLAMETHROWER].playerDamage;
-
 				if (enemy->client && enemy->client->ps.weaponUpgraded[WP_FLAMETHROWER])
 				{
-					damage *= svParams.upgradeDamageMultiplier;
+					damage = ammoTable[WP_FLAMETHROWER].playerDamageUpgraded;
+				}
+				else
+				{
+					damage = ammoTable[WP_FLAMETHROWER].playerDamage;
 				}
 			}
 			else
@@ -1886,7 +1944,7 @@ void ClientDamage( gentity_t *clent, int entnum, int enemynum, int id ) {
 					if ( ent->r.svFlags & SVF_CASTAI ) {
 						ent->s.onFireEnd = level.time + 6000;
 					} else {
-						ent->s.onFireEnd = level.time + FIRE_FLASH_TIME;
+						ent->s.onFireEnd = level.time + 1000;
 					}
 				} else {
 					ent->s.onFireEnd = level.time + 99999;  // make sure it goes for longer than they need to die

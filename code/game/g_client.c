@@ -88,25 +88,28 @@ Targets will be fired when someone spawns in on them.
 If the start position is targeting an entity, the players camera will start out facing that ent (like an info_notnull)
 */
 void SP_info_ai_respawn( gentity_t *ent ) {
-	int i;
-	vec3_t dir;
+    int i;
+    vec3_t dir;
+    char *s;  // <-- not const
 
-	G_SpawnInt( "nobots", "0", &i );
-	if ( i ) {
-		ent->flags |= FL_NO_BOTS;
-	}
-	G_SpawnInt( "nohumans", "0", &i );
-	if ( i ) {
-		ent->flags |= FL_NO_HUMANS;
-	}
+    G_SpawnInt( "nobots", "0", &i );    if ( i ) ent->flags |= FL_NO_BOTS;
+    G_SpawnInt( "nohumans", "0", &i );  if ( i ) ent->flags |= FL_NO_HUMANS;
 
-	ent->enemy = G_PickTarget( ent->target );
-	if ( ent->enemy ) {
-		VectorSubtract( ent->enemy->s.origin, ent->s.origin, dir );
-		vectoangles( dir, ent->s.angles );
-	}
+    // Parse optional name filter into existing ent->aiName
+    G_SpawnString( "ainame", "", &s );  // returns qtrue/false, but s is set either way
+    if ( s && s[0] ) {
+        ent->aiName = G_NewString( s );
+    } else {
+        ent->aiName = NULL;             // no restriction
+    }
 
-	ent->AIScript_AlertEntity = info_ai_respawn_toggle;
+    ent->enemy = G_PickTarget( ent->target );
+    if ( ent->enemy ) {
+        VectorSubtract( ent->enemy->s.origin, ent->s.origin, dir );
+        vectoangles( dir, ent->s.angles );
+    }
+
+    ent->AIScript_AlertEntity = info_ai_respawn_toggle;
 }
 
 
@@ -516,25 +519,29 @@ ClientRespawn
 ================
 */
 void ClientRespawn( gentity_t *ent ) {
+	// In Survival mode, just restart the map instead of reloading save
+	if ( g_gametype.integer == GT_SURVIVAL ) {
+		trap_SendConsoleCommand( EXEC_APPEND, "map_restart 0\n" );
+		return;
+	}
 
 	// Ridah, if single player, reload the last saved game for this player
+	if ( g_reloading.integer || saveGamePending ) {
+		return;
+	}
 
-		if ( g_reloading.integer || saveGamePending ) {
-			return;
-		}
+	if ( !( ent->r.svFlags & SVF_CASTAI ) ) {
+		// Fast method, just do a map_restart, and then load in the savegame
+		// once everything is settled.
+		trap_SetConfigstring( CS_SCREENFADE, va( "1 %i 4000", level.time + 2000 ) );
+		trap_Cvar_Set( "g_reloading", "1" );
 
-		if ( !( ent->r.svFlags & SVF_CASTAI ) ) {
-			// Fast method, just do a map_restart, and then load in the savegame
-			// once everything is settled.
-			trap_SetConfigstring( CS_SCREENFADE, va( "1 %i 4000", level.time + 2000 ) );
-			trap_Cvar_Set( "g_reloading", "1" );
+		level.reloadDelayTime = level.time + 6000;
 
-			level.reloadDelayTime = level.time + 6000;
+		trap_SendServerCommand( -1, va( "snd_fade 0 %d", 6000 ) );  // fade sound out
 
-			trap_SendServerCommand( -1, va( "snd_fade 0 %d", 6000 ) );  // fade sound out
-
-			return;
-		}
+		return;
+	}
 	// done.
 
 	ent->client->ps.pm_flags &= ~PMF_LIMBO; // JPW NERVE turns off limbo

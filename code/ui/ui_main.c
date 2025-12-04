@@ -5136,11 +5136,18 @@ static int UI_MapCountByGameType( qboolean singlePlayer ) {
 	int i, c, game;
 	c = 0;
 	game = singlePlayer ? uiInfo.gameTypes[ui_gameType.integer].gtEnum : uiInfo.gameTypes[ui_netGameType.integer].gtEnum;
+	static int s_lastEnemiesFilter = -1;
+
 	/*
 	if ( game == GT_SINGLE_PLAYER ) {
 		game++;
 	}
 	*/
+
+	if ( ui_sv_enemies.integer != s_lastEnemiesFilter ) {
+        s_lastEnemiesFilter = ui_sv_enemies.integer;
+        UI_LoadArenasIntoMapList();
+    }
 
 	for ( i = 0; i < uiInfo.mapCount; i++ ) {
 		uiInfo.mapList[i].active = qfalse;
@@ -7105,14 +7112,14 @@ void _UI_SetActiveMenu( uiMenuCommand_t menu ) {
 		case UIMENU_BOOK1:
 		case UIMENU_BOOK2:
 		case UIMENU_BOOK3:
-//			trap_Cvar_Set( "cl_paused", "1" );
+			trap_Cvar_Set( "cl_paused", "1" );
 			trap_Key_SetCatcher( KEYCATCH_UI );
 			Menus_CloseAll();
 			Menus_ActivateByName( va( "hbook%d", ( menu - UIMENU_BOOK1 ) + 1 ) );
 			return;
 
 		case UIMENU_CLIPBOARD:
-			//trap_Cvar_Set( "cl_paused", "1" );
+			trap_Cvar_Set( "cl_paused", "1" );
 			trap_Key_SetCatcher( KEYCATCH_UI );
 			Menus_CloseAll();
 			Menus_ActivateByName( "clipboard" );
@@ -7495,6 +7502,7 @@ vmCvar_t ui_prevWeapon;
 vmCvar_t ui_limboMode;
 
 vmCvar_t  cg_autoReload;
+vmCvar_t  ui_sv_enemies;
 // -NERVE - SMF
 
 cvarTable_t cvarTable[] = {
@@ -7611,6 +7619,8 @@ cvarTable_t cvarTable[] = {
 	{ &cg_autoReload, "cg_autoReload", "1", CVAR_ARCHIVE },
 
 	{ NULL, "g_localTeamPref", "", 0 },
+
+	{ &ui_sv_enemies, "ui_sv_enemies", "0", CVAR_ARCHIVE },
 };
 
 static int		cvarTableSize = ARRAY_LEN( cvarTable );

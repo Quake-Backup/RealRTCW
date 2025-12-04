@@ -35,6 +35,7 @@ If you have questions concerning this license or the applicable additional terms
 // Tab Size:		3
 //===========================================================================
 
+#include <stdbool.h>
 #include "l_cmd.h"
 #include "l_threads.h"
 #include "l_log.h"
@@ -305,7 +306,7 @@ void RunThreadsOn( int workcnt, qboolean showpacifier, void ( *func )(int) ) {
 				(LPTHREAD_START_ROUTINE)func,   // LPTHREAD_START_ROUTINE lpStartAddr,
 				(LPVOID)i,  // LPVOID lpvThreadParm,
 				0,          //   DWORD fdwCreate,
-				&threadid[i] );
+				(LPDWORD)&threadid[i] );
 //			printf("started thread %d\n", i);
 		} //end for
 
@@ -358,7 +359,7 @@ void AddThread( void ( *func )(int) ) {
 			(LPTHREAD_START_ROUTINE)func,           // LPTHREAD_START_ROUTINE lpStartAddr,
 			(LPVOID) thread->threadid,                  // LPVOID lpvThreadParm,
 			0,                              // DWORD fdwCreate,
-			&thread->id );
+			(LPDWORD)&thread->id );
 
 		//add the thread to the end of the list
 		thread->next = NULL;

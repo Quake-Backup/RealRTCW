@@ -65,6 +65,10 @@ void AICast_InitSurvival(void) {
 	svParams.wavePending = qtrue;
 	svParams.waveChangeTime = level.time + svParams.prepareTime * 1000;
 
+    // Special wave defaults
+    svParams.specialWaveActive    = qfalse;
+    svParams.lastSpecialWave      = 0;
+
 	svParams.maxActiveAI[AICHAR_SOLDIER] = svParams.initialSoldiersCount;
 	svParams.maxActiveAI[AICHAR_ZOMBIE_SURV] = svParams.initialZombiesCount;
 	svParams.maxActiveAI[AICHAR_ZOMBIE_GHOST] = svParams.initialGhostsCount;
@@ -76,6 +80,7 @@ void AICast_InitSurvival(void) {
 	svParams.maxActiveAI[AICHAR_ELITEGUARD] = svParams.initialEliteGuardsCount;
 	svParams.maxActiveAI[AICHAR_BLACKGUARD] = svParams.initialBlackGuardsCount;
 	svParams.maxActiveAI[AICHAR_VENOM] = svParams.initialVenomsCount;
+	svParams.maxActiveAI[AICHAR_LOPER] = svParams.initialLopersCount;
 }
 
 
@@ -94,6 +99,7 @@ void AICast_CreateCharacter_Survival(gentity_t *newent, cast_state_t *cs) {
         // Unlimited respawn for other AI
         cs->respawnsleft = -1;
     }
+	cs->registeredSurvivalKill = qfalse;
 }
 
 
@@ -118,6 +124,18 @@ void AIChar_AIScript_AlertEntity_Survival( gentity_t *ent ) {
 	}
 
 	cs = AICast_GetCastState( ent->s.number );
+
+	if (svParams.specialWaveActive && ent->aiTeam != 1 && ent->aiCharacter != AICHAR_LOPER_SPECIAL)
+	{
+		cs->aiFlags |= AIFL_WAITINGTOSPAWN;
+		return;
+	}
+
+	if (!svParams.specialWaveActive && ent->aiTeam != 1 && ent->aiCharacter == AICHAR_LOPER_SPECIAL)
+	{
+		cs->aiFlags |= AIFL_WAITINGTOSPAWN;
+		return;
+	}
 
 	// if the current bounding box is invalid, then wait
 	VectorAdd( ent->r.currentOrigin, ent->r.mins, mins );
@@ -199,18 +217,43 @@ Call this from AICast_Die_Survival.
 ===============
 */
 void AICast_RegisterSurvivalKill(gentity_t *self, gentity_t *attacker, int meansOfDeath) {
-    if (!self || !attacker || !svParams.waveInProgress) {
-        return;
-    }
+	
+	if (!self)
+	{
+		Com_Printf("^1[AI_SURVIVE] ERROR: AICast_RegisterSurvivalKill called with NULL self\n");
+		return;
+	}
+
+	// ===== GUARD AGAINST DOUBLE REGISTRATION =====
+	cast_state_t* cs = AICast_GetCastState(self->s.number);
+	if (cs->registeredSurvivalKill) {
+		Com_Printf("^1[AI_SURVIVE] WARNING: Duplicate kill registration for %s (ent %d)\n",
+			self->aiName ? self->aiName : "UNKNOWN", self->s.number);
+		return;
+	}
+	cs->registeredSurvivalKill = qtrue;
 
 	 // Skip counting if the dying entity is a friendly AI (aiTeam == 1)
     if (self->aiCharacter && self->aiTeam == 1) {
-        Com_Printf("^3[AI_SURVIVE] INFO: Friendly AI death ignored. aiCharacter=%d, aiTeam=%d\n", self->aiCharacter, self->aiTeam);
+        //Com_Printf("^3[AI_SURVIVE] INFO: Friendly AI death ignored. aiCharacter=%d, aiTeam=%d\n", self->aiCharacter, self->aiTeam);
         return;
     }
 
+	if (!svParams.waveInProgress){
+		Com_Printf("^3[AI_SURVIVE] INFO: Wave not in progress, kill not counted. aiCharacter=%d, aiTeam=%d\n", self->aiCharacter, self->aiTeam);
+		return;
+	}
+
 	qboolean killerPlayer   = attacker->client && !attacker->aiCharacter;
 	qboolean killerFriendly = attacker->aiCharacter && attacker->aiTeam == 1;
+
+if (!attacker) {
+        Com_Printf("^1[AI_SURVIVE] WARNING: AI %s died with no attacker (meansOfDeath=%d)\n",
+        self->aiName ? self->aiName : "UNKNOWN", meansOfDeath);
+		svParams.waveKillCount++;
+        AICast_CheckSurvivalProgression(&g_entities[0]);
+        return;
+}
 
 if (!killerPlayer && !killerFriendly) {
     Com_Printf(
@@ -235,6 +278,7 @@ if (!killerPlayer && !killerFriendly) {
 
 	// Always use attacker to trigger progression check
 	AICast_CheckSurvivalProgression(attacker);
+
 }
 
 
@@ -299,6 +343,9 @@ void AICast_SetRebirthTimeSurvival(gentity_t *ent, cast_state_t *cs) {
 			case AICHAR_ZOMBIE_FLAME:
 				baseTime = svParams.flamerSpawnTime * 1000;
 				break;
+			case AICHAR_LOPER:
+				baseTime = svParams.loperSpawnTime * 1000;
+				break;
 			default: // Regular soldiers and zombies
 				baseTime = svParams.defaultSpawnTime * 1000;
 				break;
@@ -320,16 +367,12 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 	int killer = 0;
 	cast_state_t    *cs;
 	qboolean nogib = qtrue;
-	qboolean respawn = qfalse;
 
 	// Achievements related stuff! 
 	qboolean modPanzerfaust = (meansOfDeath == MOD_ROCKET || meansOfDeath == MOD_ROCKET_SPLASH);
 	qboolean modKicked = (meansOfDeath == MOD_KICKED);
 	qboolean modKnife = (meansOfDeath == MOD_KNIFE);
-	qboolean modCrush = (meansOfDeath == MOD_CRUSH);
-	qboolean modFalling = (meansOfDeath == MOD_FALLING);
 	qboolean killerPlayer	 = attacker && attacker->client && !( attacker->aiCharacter );
-	qboolean killerEnv	 = attacker && !(attacker->client) && !( attacker->aiCharacter );
 
     // ETSP Achievements stuff!
 	qboolean modGL = (meansOfDeath == MOD_M7 );
@@ -343,14 +386,6 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		if ( !g_cheats.integer )
 		{
 		steamSetAchievement("ACH_LOPER_ROCKET");
-		}
-	}
-
-	if(self->aiCharacter == AICHAR_PROTOSOLDIER && killerEnv && modFalling)
-	{
-		if ( !g_cheats.integer ) 
-		{
-		steamSetAchievement("ACH_PROTO_FALL");
 		}
 	}
 
@@ -368,14 +403,6 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		if ( !g_cheats.integer ) 
 		{
 		steamSetAchievement("ACH_PROTO_KNIFE");
-		}
-	}
-
-		if(self->aiCharacter == AICHAR_HEINRICH && killerEnv && modCrush)
-	{
-		if ( !g_cheats.integer ) 
-		{
-		steamSetAchievement("ACH_HEIN_NOSHOT");
 		}
 	}
 
@@ -451,25 +478,6 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		}
 	}
 
-	// the zombie should show special effect instead of gibbing
-	if ( self->aiCharacter == AICHAR_ZOMBIE && cs->secondDeadTime ) {
-		if ( cs->secondDeadTime > 1 ) {
-			// we are already totally dead
-			self->health += damage; // don't drop below gib_health if we weren't already below it
-			return;
-		}
-
-		// always gib
-		self->health = -999;
-		damage = 999;
-	}
-
-	// Zombies are very fragile against highly explosives
-	if ( (self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST || self->aiCharacter == AICHAR_ZOMBIE_FLAME  ) && damage > 20 && inflictor != attacker ) {
-		self->health = -999;
-		damage = 999;
-	}
-
 	// process the event
 	if ( self->client->ps.pm_type == PM_DEAD ) {
 		// already dead
@@ -537,8 +545,6 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 		// remove powerups
 		memset( self->client->ps.powerups, 0, sizeof( self->client->ps.powerups ) );
 
-		//cs->rebirthTime = 0;
-
 		// never gib in a nodrop
 		if ( self->health <= GIB_HEALTH ) {
 			if ( self->aiCharacter == AICHAR_ZOMBIE || self->aiCharacter == AICHAR_ZOMBIE_SURV || self->aiCharacter == AICHAR_ZOMBIE_GHOST || self->aiCharacter == AICHAR_ZOMBIE_FLAME  ) {
@@ -547,73 +553,57 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 				nogib = qfalse;
 			} else if ( !( contents & CONTENTS_NODROP ) ) {
 				body_die( self, inflictor, attacker, damage, meansOfDeath );
-				//GibEntity( self, killer );
 				nogib = qfalse;
 			}
 		}
 
-		// if we are a zombie, and lying down during our first death, then we should just die
-		if ( !( self->aiCharacter == AICHAR_ZOMBIE && cs->secondDeadTime && cs->rebirthTime ) ) {
-
-			// set enemy weapon
-			BG_UpdateConditionValue( self->s.number, ANIM_COND_ENEMY_WEAPON, 0, qfalse );
-			if ( attacker && attacker->client ) {
-				BG_UpdateConditionValue( self->s.number, ANIM_COND_ENEMY_WEAPON, inflictor->s.weapon, qtrue );
-			} else {
-				BG_UpdateConditionValue( self->s.number, ANIM_COND_ENEMY_WEAPON, 0, qfalse );
-			}
-
-			// set enemy location
-			BG_UpdateConditionValue( self->s.number, ANIM_COND_ENEMY_POSITION, 0, qfalse );
-			if ( infront( self, inflictor ) ) {
-				BG_UpdateConditionValue( self->s.number, ANIM_COND_ENEMY_POSITION, POSITION_INFRONT, qtrue );
-			} else {
-				BG_UpdateConditionValue( self->s.number, ANIM_COND_ENEMY_POSITION, POSITION_BEHIND, qtrue );
-			}
-
-			if ( self->takedamage ) { // only play the anim if we haven't gibbed
-				// play the animation
-				BG_AnimScriptEvent( &self->client->ps, ANIM_ET_DEATH, qfalse, qtrue );
-			}
-
-			// set gib delay
-			if ( cs->aiCharacter == AICHAR_HEINRICH || cs->aiCharacter == AICHAR_HELGA ) {
-				cs->lastLoadTime = level.time + self->client->ps.torsoTimer - 200;
-			}
-
-			// set this flag so no other anims override us
-			self->client->ps.eFlags |= EF_DEAD;
-			self->s.eFlags |= EF_DEAD;
-
+		// set enemy weapon
+		BG_UpdateConditionValue(self->s.number, ANIM_COND_ENEMY_WEAPON, 0, qfalse);
+		if (attacker && attacker->client)
+		{
+			BG_UpdateConditionValue(self->s.number, ANIM_COND_ENEMY_WEAPON, inflictor->s.weapon, qtrue);
+		}
+		else
+		{
+			BG_UpdateConditionValue(self->s.number, ANIM_COND_ENEMY_WEAPON, 0, qfalse);
 		}
 
+		// set enemy location
+		BG_UpdateConditionValue(self->s.number, ANIM_COND_ENEMY_POSITION, 0, qfalse);
+		if (infront(self, inflictor))
+		{
+			BG_UpdateConditionValue(self->s.number, ANIM_COND_ENEMY_POSITION, POSITION_INFRONT, qtrue);
+		}
+		else
+		{
+			BG_UpdateConditionValue(self->s.number, ANIM_COND_ENEMY_POSITION, POSITION_BEHIND, qtrue);
+		}
+
+		if (self->takedamage)
+		{ // only play the anim if we haven't gibbed
+			// play the animation
+			BG_AnimScriptEvent(&self->client->ps, ANIM_ET_DEATH, qfalse, qtrue);
+		}
+
+		// set gib delay
+		if (cs->aiCharacter == AICHAR_HEINRICH || cs->aiCharacter == AICHAR_HELGA)
+		{
+			cs->lastLoadTime = level.time + self->client->ps.torsoTimer - 200;
+		}
+
+		// set this flag so no other anims override us
+		self->client->ps.eFlags |= EF_DEAD;
+		self->s.eFlags |= EF_DEAD;
+
 		cs->deadSinkStartTime = 0;
-		
 	}
 
 	if ( nogib ) {
-		// set for rebirth
-		if ( self->aiCharacter == AICHAR_ZOMBIE ) {
-			if ( !cs->secondDeadTime ) {
-				cs->rebirthTime = level.time + 5000 + rand() % 2000;
-				// RF, only set for gib at next death, if NoRevive is not set
-				if ( !( self->spawnflags & 2 ) ) {
-					cs->secondDeadTime = qtrue;
-				}
-				cs->revivingTime = 0;
-			} else if ( cs->secondDeadTime > 1 ) {
-				cs->rebirthTime = 0;
-				cs->revivingTime = 0;
-				cs->deathTime = level.time;
-			}
-		} else {
-			// the body can still be gibbed
-			self->die = body_die;
-		}
+		// the body can still be gibbed
+		self->die = body_die;
 	}
 
-		respawn = qtrue;
-		nogib = qtrue;
+	nogib = qtrue;
 
     AICast_SetRebirthTimeSurvival(self, cs);
 
@@ -625,36 +615,25 @@ void AICast_Die_Survival( gentity_t *self, gentity_t *inflictor, gentity_t *atta
 	// mark the time of death
 	cs->deathTime = level.time;
 
-	// dying ai's can trigger a target
-	if ( !cs->rebirthTime ) {
-		G_UseTargets( self, self );
-		// really dead now, so call the script
-		if ( attacker ) {
-			AICast_ScriptEvent( cs, "death", attacker->aiName ? attacker->aiName : "" );
-		} else {
-			AICast_ScriptEvent( cs, "death", "" );
-		}
-		// call the deathfunc for this cast, so we can play associated sounds, or do any character-specific things
-		if ( !( cs->aiFlags & AIFL_DENYACTION ) && cs->deathfunc ) {
-			cs->deathfunc( self, attacker, damage, meansOfDeath );   //----(SA)	added mod
-		}
-	} else {
-		// really dead now, so call the script
-		if ( respawn && self->aiCharacter != AICHAR_ZOMBIE && self->aiCharacter != AICHAR_HELGA
-			 && self->aiCharacter != AICHAR_HEINRICH && nogib && !cs->norespawn ) {
+	// really dead now, so call the script
+	if (self->aiCharacter != AICHAR_ZOMBIE && self->aiCharacter != AICHAR_HELGA && self->aiCharacter != AICHAR_HEINRICH && nogib && !cs->norespawn)
+	{
 
-			if ( !cs->died ) {
-				G_UseTargets( self, self );                 // testing
-				AICast_ScriptEvent( cs, "death", "" );
-				cs->died = qtrue;
-			}
-		} else {
-			AICast_ScriptEvent( cs, "fakedeath", "" );
+		if (!cs->died)
+		{
+			G_UseTargets(self, self); // testing
+			AICast_ScriptEvent(cs, "death", "");
+			cs->died = qtrue;
 		}
-		// call the deathfunc for this cast, so we can play associated sounds, or do any character-specific things
-		if ( !( cs->aiFlags & AIFL_DENYACTION ) && cs->deathfunc ) {
-			cs->deathfunc( self, attacker, damage, meansOfDeath );   //----(SA)	added mod
-		}
+	}
+	else
+	{
+		AICast_ScriptEvent(cs, "fakedeath", "");
+	}
+	// call the deathfunc for this cast, so we can play associated sounds, or do any character-specific things
+	if (!(cs->aiFlags & AIFL_DENYACTION) && cs->deathfunc)
+	{
+		cs->deathfunc(self, attacker, damage, meansOfDeath);
 	}
 }
 
@@ -744,6 +723,13 @@ void AICast_UpdateMaxActiveAI(void)
             svParams.maxActiveAI[AICHAR_ZOMBIE_FLAME] = svParams.maxFlamers;
         }
     }
+
+	if (svParams.waveCount >= svParams.waveLopers) {
+        svParams.maxActiveAI[AICHAR_LOPER] += svParams.lopersIncrease;
+        if (svParams.maxActiveAI[AICHAR_LOPER] > svParams.maxLopers) {
+            svParams.maxActiveAI[AICHAR_LOPER] = svParams.maxLopers;
+        }
+    }
 }
 
 /*
@@ -781,6 +767,9 @@ void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs)
 	case AICHAR_PRIEST:
 		waveAppeared = svParams.wavePriests;
 		break;
+	case AICHAR_LOPER:
+		waveAppeared = svParams.waveLopers;
+		break;
 	default:
 		waveAppeared = 0;
 		break;
@@ -806,17 +795,17 @@ void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs)
 
 		case AICHAR_ELITEGUARD:
 			newHealth = 30 + steps * stepMultiplier;
-			if (newHealth > 140) newHealth = 140;
+			if (newHealth > 150) newHealth = 150;
 			break;
 
 		case AICHAR_BLACKGUARD:
 			newHealth = 40 + steps * stepMultiplier;
-			if (newHealth > 180) newHealth = 180;
+			if (newHealth > 200) newHealth = 200;
 			break;
 
 		case AICHAR_VENOM:
 			newHealth = 50 + steps * stepMultiplier;
-			if (newHealth > 250) newHealth = 250;
+			if (newHealth > 500) newHealth = 500;
 			break;
 
 		case AICHAR_ZOMBIE_SURV:
@@ -828,32 +817,32 @@ void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs)
 			break;
 
 		case AICHAR_ZOMBIE_GHOST:
-			newHealth = 20 + steps * stepMultiplier;
-			if (newHealth > 200) newHealth = 200;
-			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
-			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
-			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
-			break;
-
-		case AICHAR_WARZOMBIE:
-			newHealth = 40 + steps * stepMultiplier;
+			newHealth = 30 + steps * stepMultiplier;
 			if (newHealth > 300) newHealth = 300;
 			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
 			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
 			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
 			break;
 
+		case AICHAR_WARZOMBIE:
+			newHealth = 50 + steps * stepMultiplier;
+			if (newHealth > 500) newHealth = 500;
+			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
+			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
+			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
+			break;
+
 		case AICHAR_PROTOSOLDIER:
-			newHealth = 500 + steps * stepMultiplier;
-			if (newHealth > 1000) newHealth = 1000;
+			newHealth = 1000 + steps * stepMultiplier;
+			if (newHealth > 2000) newHealth = 2000;
 			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.6f);
 			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 1.5f);
 			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.75f);
 			break;
 
 		case AICHAR_PARTISAN:
-			newHealth = 250 + steps * stepMultiplier;
-			if (newHealth > 800) newHealth = 800;
+			newHealth = 500 + steps * stepMultiplier;
+			if (newHealth > 1000) newHealth = 1000;
 			break;
 
 		case AICHAR_PRIEST:
@@ -870,6 +859,14 @@ void AICast_ApplySurvivalAttributes(gentity_t *ent, cast_state_t *cs)
 			runSpeedScale    = fminf(0.8f + steps * 0.1f, 1.4f);
 			sprintSpeedScale = fminf(1.2f + steps * 0.1f, 2.0f);
 			crouchSpeedScale = fminf(0.25f + steps * 0.1f, 0.5f);
+			break;
+		case AICHAR_LOPER:
+			newHealth = 250 + steps * stepMultiplier;
+			if (newHealth > 500) newHealth = 500;
+			break;
+		case AICHAR_LOPER_SPECIAL:
+			newHealth = 50 + steps * stepMultiplier;
+			if (newHealth > 250) newHealth = 250;
 			break;
 
 		default:
@@ -916,52 +913,54 @@ void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
 
 	switch (characterNum) {
 		case AICHAR_SOLDIER:
-			aimSkill     = fminf(0.1f + delta, 0.6f);
-			aimAccuracy  = fminf(0.1f + delta, 0.6f);
-			attackSkill  = fminf(0.1f + delta, 0.6f);
+			aimSkill     = fminf(0.1f + delta, 0.7f);
+			aimAccuracy  = fminf(0.1f + delta, 0.7f);
+			attackSkill  = fminf(0.1f + delta, 0.7f);
 			aggression   = fminf(0.1f + delta, 1.0f);
-			reactionTime = fmaxf(1.0f - delta, 0.5f);
+			reactionTime = fmaxf(1.0f - delta, 0.4f);
 			break;
 		case AICHAR_ELITEGUARD:
-			aimSkill     = fminf(0.3f + delta, 0.7f);
-			aimAccuracy  = fminf(0.3f + delta, 0.7f);
-			attackSkill  = fminf(0.3f + delta, 0.7f);
+			aimSkill     = fminf(0.3f + delta, 0.8f);
+			aimAccuracy  = fminf(0.3f + delta, 0.8f);
+			attackSkill  = fminf(0.3f + delta, 0.8f);
 			aggression   = fminf(0.3f + delta, 1.0f);
-			reactionTime = fmaxf(1.0f - delta, 0.4f);
+			reactionTime = fmaxf(1.0f - delta, 0.3f);
 			break;
 		case AICHAR_BLACKGUARD:
-			aimSkill     = fminf(0.4f + delta, 0.7f);
-			aimAccuracy  = fminf(0.4f + delta, 0.7f);
-			attackSkill  = fminf(0.4f + delta, 0.7f);
-			aggression   = fminf(0.5f + delta, 1.0f);
-			reactionTime = fmaxf(1.0f - delta, 0.4f);
-			break;
-		case AICHAR_VENOM:
-			aimSkill     = fminf(0.4f + delta, 0.8f);
-			aimAccuracy  = fminf(0.4f + delta, 0.8f);
-			attackSkill  = fminf(0.4f + delta, 0.8f);
-			aggression   = fminf(0.5f + delta, 1.0f);
-			reactionTime = fmaxf(1.0f - delta, 0.4f);
-			break;
-		case AICHAR_PROTOSOLDIER:
-			aimSkill     = fminf(0.4f + delta, 0.8f);
-			aimAccuracy  = fminf(0.4f + delta, 0.8f);
-			attackSkill  = fminf(0.4f + delta, 0.8f);
+			aimSkill     = fminf(0.4f + delta, 0.9f);
+			aimAccuracy  = fminf(0.4f + delta, 0.9f);
+			attackSkill  = fminf(0.4f + delta, 0.9f);
 			aggression   = fminf(0.5f + delta, 1.0f);
 			reactionTime = fmaxf(1.0f - delta, 0.3f);
+			break;
+		case AICHAR_VENOM:
+			aimSkill     = fminf(0.4f + delta, 0.9f);
+			aimAccuracy  = fminf(0.4f + delta, 0.9f);
+			attackSkill  = fminf(0.4f + delta, 0.9f);
+			aggression   = fminf(0.5f + delta, 1.0f);
+			reactionTime = fmaxf(1.0f - delta, 0.3f);
+			break;
+		case AICHAR_PROTOSOLDIER:
+			aimSkill     = fminf(0.4f + delta, 0.9f);
+			aimAccuracy  = fminf(0.4f + delta, 0.9f);
+			attackSkill  = fminf(0.4f + delta, 0.9f);
+			aggression   = fminf(0.5f + delta, 1.0f);
+			reactionTime = fmaxf(1.0f - delta, 0.2f);
 			break;
 		case AICHAR_PARTISAN:
 			aimSkill     = 0.9f;
 			aimAccuracy  = 0.9f;
 			attackSkill  = 0.9f;
 			aggression   = 0.9f;
-			reactionTime = 0.4f;
+			reactionTime = 0.2f;
 			break;
 		case AICHAR_ZOMBIE_SURV:
 		case AICHAR_ZOMBIE_FLAME:
 		case AICHAR_WARZOMBIE:
 		case AICHAR_PRIEST:
 		case AICHAR_ZOMBIE_GHOST:
+		case AICHAR_LOPER:
+		case AICHAR_LOPER_SPECIAL:
 			aimSkill     = 1.0f;
 			aimAccuracy  = 1.0f;
 			attackSkill  = 1.0f;
@@ -979,17 +978,73 @@ void BG_SetBehaviorForSurvival(AICharacters_t characterNum) {
 	aiDefaults[characterNum].attributes[REACTION_TIME] = reactionTime;
 }
 
+static qboolean AICast_ShouldStartSpecialWave(void) {
+    // 0 = disabled → never start special waves
+    if (g_specialWaves.integer == 0 || svParams.specialWaveChance <= 0) 
+        return qfalse;
+
+    int wave = svParams.waveCount; // wave we’re starting now
+
+    // Too early
+    if (wave < svParams.specialWaveMinStart)
+        return qfalse;
+
+    // Enforce minimal gap after a special (cooldown)
+    if (svParams.lastSpecialWave > 0) {
+        int delta = wave - svParams.lastSpecialWave; // distance to previous special
+        if (delta <= svParams.specialMinGap)
+            return qfalse; // still cooling down
+    }
+
+    // How many full NON-special waves since last special?
+    // If none yet, count since first eligible (specialWaveMinStart).
+    int gapSince = (svParams.lastSpecialWave > 0)
+        ? (wave - svParams.lastSpecialWave - 1)
+        : (wave - svParams.specialWaveMinStart);
+
+    // Hard guarantee: if we waited long enough, force a special
+    if (gapSince >= svParams.specialMaxGap)
+        return qtrue;
+
+    // Otherwise randomized
+    int roll = rand() % 100; // 0..99
+    return (roll < svParams.specialWaveChance) ? qtrue : qfalse;
+}
+
 void AICast_CheckSurvivalProgression(gentity_t *attacker) {
 
 	gentity_t *player;
 	player = AICast_FindEntityForName("player");
     // DEBUG: log current kill progress
-    Com_Printf("^2[AI_SURVIVE] waveKillCount = %d, killCountRequirement = %d, wavePending = %d^7\n",
-        svParams.waveKillCount, svParams.killCountRequirement, svParams.wavePending);
+   // Com_Printf("^2[AI_SURVIVE] waveKillCount = %d, killCountRequirement = %d, wavePending = %d^7\n",
+      //  svParams.waveKillCount, svParams.killCountRequirement, svParams.wavePending);
 
-    if (svParams.waveKillCount == svParams.killCountRequirement && !svParams.wavePending) {
+	if (svParams.waveKillCount < svParams.killCountRequirement)
+	{
+		int enemiesAlive = 0;
+		for (int i = 0; i < level.num_entities; i++)
+		{
+			gentity_t *ent = &g_entities[i];
+			if (!ent->inuse || !ent->client || ent->aiTeam == 1)
+				continue;
+			if (!(ent->client->ps.eFlags & EF_DEAD))
+			{
+				enemiesAlive++;
+			}
+		}
+
+		if (enemiesAlive == 0)
+		{
+			Com_Printf("^1[AI_SURVIVE] ERROR: No enemies alive but wave not complete (%d/%d kills)\n",
+					   svParams.waveKillCount, svParams.killCountRequirement);
+			// Failsafe: push wave forward or increment kill count manually
+			svParams.waveKillCount = svParams.killCountRequirement;
+		}
+	}
+
+	if (svParams.waveKillCount == svParams.killCountRequirement && !svParams.wavePending) {
         //  DEBUG: progression triggered
-        Com_Printf("^1[AI_SURVIVE] Wave %d complete! Triggering intermission and progression.^7\n", svParams.waveCount);
+        //Com_Printf("^1[AI_SURVIVE] Wave %d complete! Triggering intermission and progression.^7\n", svParams.waveCount);
 
         svParams.wavePending = qtrue;
         svParams.waveChangeTime = level.time + svParams.intermissionTime * 1000;
@@ -1003,8 +1058,13 @@ void AICast_CheckSurvivalProgression(gentity_t *attacker) {
             steamSetAchievement("ACH_NO_CLASS");
         }
 
-		AICast_ScriptEvent( AICast_GetCastState( player->s.number ), "wave_end", "" );
-    }
+		char endEvtBuf[32];
+		Q_strncpyz(
+			endEvtBuf,
+			svParams.specialWaveActive ? "specialwave_end" : "wave_end",
+			sizeof(endEvtBuf));
+		AICast_ScriptEvent(AICast_GetCastState(player->s.number), endEvtBuf, "");
+	}
 }
 
 void AICast_TickSurvivalWave(void) {
@@ -1035,7 +1095,31 @@ void AICast_TickSurvivalWave(void) {
 		killReq = (int)(0.15f * wave * wave + 3.0f * wave + 10.0f);
 	}
 
-	svParams.killCountRequirement = killReq;
+    // special waves logic
+    svParams.specialWaveActive = qfalse;
+    if (AICast_ShouldStartSpecialWave()) {
+        svParams.specialWaveActive = qtrue;
+        svParams.lastSpecialWave   = wave;
+
+        // Scale LOPER count a bit with wave number, but keep it simple
+        int lopers = svParams.specialLopersInitialCount + svParams.specialLopersIncrease * (wave - svParams.specialWaveMinStart);
+        if (lopers < svParams.specialLopersInitialCount) lopers = svParams.specialLopersInitialCount;
+
+        // On special wave the kill requirement is exactly the number of LOPERs
+        svParams.killCountRequirement = lopers;
+
+        svParams.maxActiveAI[AICHAR_LOPER_SPECIAL] = (lopers < svParams.specialLopersMax) ? lopers : svParams.specialLopersMax;
+
+        // (Optional) You can mute growth of other classes this wave by skipping UpdateMaxActiveAI
+    } else {
+        // Normal wave
+        svParams.killCountRequirement = killReq;
+
+        if (wave > 1) {
+            AICast_UpdateMaxActiveAI();
+        }
+    }
+    // --- END SPECIAL WAVE DECISION ---
 
     // Track wave count per player
     for (int i = 0; i < g_maxclients.integer; i++) {
@@ -1045,13 +1129,12 @@ void AICast_TickSurvivalWave(void) {
         cl->client->ps.persistant[PERS_WAVES]++;
     }
 
-	AICast_ScriptEvent( AICast_GetCastState( player->s.number ), "wave_start", "" );
+    if (svParams.specialWaveActive) {
+        AICast_ScriptEvent(AICast_GetCastState(player->s.number), "specialwave_start", "");
+    } else {
+        AICast_ScriptEvent(AICast_GetCastState(player->s.number), "wave_start", "");
+    }
 
-	// Do not increase max active AI on the first wave
-	if (wave > 1)
-	{
-		AICast_UpdateMaxActiveAI();
-	}
 }
 
 
@@ -1079,6 +1162,16 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
         return;
     }
 
+	// Same block for respawns
+	if (svParams.specialWaveActive && ent->aiTeam != 1 && ent->aiCharacter != AICHAR_LOPER_SPECIAL)
+	{
+		return;
+	}
+
+	if (!svParams.specialWaveActive && ent->aiTeam != 1 && ent->aiCharacter == AICHAR_LOPER_SPECIAL)
+	{
+		return;
+	}
 
 			if ( ent->aiCharacter != AICHAR_ZOMBIE && ent->aiCharacter != AICHAR_HELGA
 				 && ent->aiCharacter != AICHAR_HEINRICH ) {
@@ -1148,6 +1241,8 @@ void AICast_SurvivalRespawn(gentity_t *ent, cast_state_t *cs) {
 
 				cs->rebirthTime = 0;
 				cs->deathTime = 0;
+				cs->died = qfalse;
+				cs->registeredSurvivalKill = qfalse;
 
 				ent->client->ps.eFlags &= ~EF_DEATH_FRAME;
 				ent->client->ps.eFlags &= ~EF_FORCE_END_FRAME;
@@ -1183,7 +1278,7 @@ void AI_LoadSurvivalTable( const char* mapname )
 
 	handle = trap_PC_LoadSource( va( "maps/%s.surv", mapname ) );
 	if ( !handle ) {
-		G_Printf( S_COLOR_YELLOW "WARNING: Failed to load .surv file. Trying to load default.surv\n" );
+		//G_Printf( S_COLOR_YELLOW "WARNING: Failed to load .surv file. Trying to load default.surv\n" );
 
 		handle = trap_PC_LoadSource( "maps/default.surv" );
 
@@ -1329,6 +1424,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 				return qfalse;
 			}
 		}
+		else if (!Q_stricmp(token.string, "initialLopersCount"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.initialLopersCount))
+			{
+				PC_SourceError(handle, "expected initialLopersCount value");
+				return qfalse;
+			}
+		}
 		else if (!Q_stricmp(token.string, "soldiersIncrease"))
 		{
 			if (!PC_Int_Parse(handle, &svParams.soldiersIncrease))
@@ -1409,6 +1512,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 				return qfalse;
 			}
 		}
+		else if (!Q_stricmp(token.string, "lopersIncrease"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.lopersIncrease))
+			{
+				PC_SourceError(handle, "expected lopersIncrease value");
+				return qfalse;
+			}
+		}
 		else if (!Q_stricmp(token.string, "maxSoldiers"))
 		{
 			if (!PC_Int_Parse(handle, &svParams.maxSoldiers))
@@ -1446,6 +1557,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Int_Parse(handle, &svParams.maxZombies))
 			{
 				PC_SourceError(handle, "expected maxZombies value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "maxLopers"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.maxLopers))
+			{
+				PC_SourceError(handle, "expected maxLopers value");
 				return qfalse;
 			}
 		}
@@ -1550,6 +1669,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Int_Parse(handle, &svParams.waveFlamers))
 			{
 				PC_SourceError(handle, "expected waveFlamers value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "waveLopers"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.waveLopers))
+			{
+				PC_SourceError(handle, "expected waveLopers value");
 				return qfalse;
 			}
 		}
@@ -1694,6 +1821,14 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Int_Parse(handle, &svParams.flamerSpawnTime))
 			{
 				PC_SourceError(handle, "expected flamerSpawnTime value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "loperSpawnTime"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.loperSpawnTime))
+			{
+				PC_SourceError(handle, "expected loperSpawnTime value");
 				return qfalse;
 			}
 		}
@@ -2121,11 +2256,59 @@ qboolean BG_ParseSurvivalTable(int handle)
 				return qfalse;
 			}
 		}
-		else if (!Q_stricmp(token.string, "upgradeDamageMultiplier"))
+		else if (!Q_stricmp(token.string, "specialMinGap"))
 		{
-			if (!PC_Int_Parse(handle, &svParams.upgradeDamageMultiplier))
+			if (!PC_Int_Parse(handle, &svParams.specialMinGap))
 			{
-				PC_SourceError(handle, "expected upgradeDamageMultiplier value");
+				PC_SourceError(handle, "expected specialMinGap value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "specialMaxGap"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.specialMaxGap))
+			{
+				PC_SourceError(handle, "expected specialMaxGap value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "specialWaveMinStart"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.specialWaveMinStart))
+			{
+				PC_SourceError(handle, "expected specialWaveMinStart value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "specialWaveChance"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.specialWaveChance))
+			{
+				PC_SourceError(handle, "expected specialWaveChance value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "specialLopersInitialCount"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.specialLopersInitialCount))
+			{
+				PC_SourceError(handle, "expected specialLopersInitialCount value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "specialLopersIncrease"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.specialLopersIncrease))
+			{
+				PC_SourceError(handle, "expected specialLopersIncrease value");
+				return qfalse;
+			}
+		}
+		else if (!Q_stricmp(token.string, "specialLopersMax"))
+		{
+			if (!PC_Int_Parse(handle, &svParams.specialLopersMax))
+			{
+				PC_SourceError(handle, "expected specialLopersMax value");
 				return qfalse;
 			}
 		}
@@ -2142,14 +2325,6 @@ qboolean BG_ParseSurvivalTable(int handle)
 			if (!PC_Float_Parse(handle, &svParams.ltAmmoBonus))
 			{
 				PC_SourceError(handle, "expected ltAmmoBonus value");
-				return qfalse;
-			}
-		}
-		else if (!Q_stricmp(token.string, "upgradeSpreadReduceMultiplier"))
-		{
-			if (!PC_Float_Parse(handle, &svParams.upgradeSpreadReduceMultiplier))
-			{
-				PC_SourceError(handle, "expected upgradeSpreadReduceMultiplier value");
 				return qfalse;
 			}
 		}
