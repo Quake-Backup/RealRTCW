@@ -544,7 +544,7 @@ static void IN_InitJoystick( void )
 	if( in_joystickNo->integer < 0 || in_joystickNo->integer >= total )
 		Cvar_Set( "in_joystickNo", "0" );
 
-	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "0", CVAR_ARCHIVE );
+	in_joystickUseAnalog = Cvar_Get( "in_joystickUseAnalog", "1", CVAR_ARCHIVE );
 
 	stick = SDL_JoystickOpen( in_joystickNo->integer );
 
@@ -686,19 +686,22 @@ static void IN_GamepadMove( void )
 		qboolean pressed = SDL_GameControllerGetButton(gamepad, SDL_CONTROLLER_BUTTON_A + i);
 		if (pressed != stick_state.buttons[i])
 		{
-			Com_QueueEvent(in_eventTime, SE_KEY, K_PAD0_A + i, pressed, 0, NULL);
-#if SDL_VERSION_ATLEAST( 2, 0, 14 )
-			if ( i >= SDL_CONTROLLER_BUTTON_MISC1 ) {
-				Com_QueueEvent(in_eventTime, SE_KEY, K_PAD0_MISC1 + i - SDL_CONTROLLER_BUTTON_MISC1, pressed, 0, NULL);
-			} else
+#if SDL_VERSION_ATLEAST(2, 0, 14)
+			if (i >= SDL_CONTROLLER_BUTTON_MISC1)
+			{
+				Com_QueueEvent(in_eventTime, SE_KEY,
+							   K_PAD0_MISC1 + i - SDL_CONTROLLER_BUTTON_MISC1,
+							   pressed, 0, NULL);
+			}
+			else
 #endif
 			{
 				Com_QueueEvent(in_eventTime, SE_KEY, K_PAD0_A + i, pressed, 0, NULL);
 			}
+
 			stick_state.buttons[i] = pressed;
 		}
 	}
-
 	// must defer translated axes until all real axes are processed
 	// must be done this way to prevent a later mapped axis from zeroing out a previous one
 	if (in_joystickUseAnalog->integer)
@@ -1274,7 +1277,7 @@ void IN_Init( void *windowData )
 	in_mouse = Cvar_Get( "in_mouse", "1", CVAR_ARCHIVE );
 	in_nograb = Cvar_Get( "in_nograb", "0", CVAR_ARCHIVE );
 
-	in_joystick = Cvar_Get( "in_joystick", "0", CVAR_LATCH );
+	in_joystick = Cvar_Get( "in_joystick", "1", CVAR_ARCHIVE );
 	in_joystickThreshold = Cvar_Get( "joy_threshold", "0.15", CVAR_ARCHIVE );
 
 	SDL_StartTextInput( );

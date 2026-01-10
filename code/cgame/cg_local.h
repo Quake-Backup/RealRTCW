@@ -872,6 +872,7 @@ typedef struct {
 	int zoomTime;
 	float zoomSensitivity;
 	float zoomval;
+	qboolean isZoomed;
 
 
 	// information screen text during loading
@@ -1085,6 +1086,9 @@ typedef struct {
 
 	float rumbleScale;          //RUMBLE FX using new shakeCamera code
 	pmoveExt_t pmext;
+
+	qboolean simpleZoomed;
+	int simpleZoomTime;
 
 } cg_t;
 
@@ -1812,8 +1816,6 @@ extern vmCvar_t cg_zoomDefaultBinoc;
 extern vmCvar_t cg_zoomDefaultSniper;
 extern vmCvar_t cg_zoomDefaultFG;
 extern vmCvar_t cg_zoomDefaultSnooper;
-extern vmCvar_t cg_zoomSensitivity;
-extern vmCvar_t cg_zoomSensitivityFovScaled;
 extern vmCvar_t cg_zoomStepBinoc;
 extern vmCvar_t cg_zoomStepSniper;
 extern vmCvar_t cg_zoomStepSnooper;
@@ -1943,6 +1945,9 @@ extern vmCvar_t	cg_weaponBounceSound;
 
 extern vmCvar_t cg_showSocials;
 extern vmCvar_t cg_gothic;
+
+extern vmCvar_t cg_simpleZoomFov;
+extern vmCvar_t cg_simpleZoomTimeMs;
 
 //
 // cg_main.c
@@ -2160,6 +2165,7 @@ void CG_PrevWeapon_f( void );
 void CG_Weapon_f( void );
 void CG_WeaponBank_f( void );
 void CG_WeaponSuggest( int weap );
+void CG_ResetSimpleZoom(void);
 
 void CG_FinishWeaponChange( int lastweap, int newweap );
 
@@ -2589,7 +2595,7 @@ int         trap_GetCurrentCmdNumber( void );
 qboolean    trap_GetUserCmd( int cmdNumber, usercmd_t *ucmd );
 
 // used for the weapon/holdable select and zoom
-void        trap_SetUserCmdValue( int stateValue, int holdValue, float sensitivityScale, int cld );     // NERVE - SMF - added cld
+void        trap_SetUserCmdValue( int stateValue, int holdValue, float sensitivityScale, int cld, qboolean isZoomed );     // NERVE - SMF - added cld
 
 // aids for VM testing
 void        testPrintInt( char *string, int i );

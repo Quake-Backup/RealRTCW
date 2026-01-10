@@ -128,13 +128,14 @@ typedef struct {
 
 	int mouseDx[2], mouseDy[2];         // added to by mouse events
 	int mouseIndex;
-	int joystickAxis[MAX_JOYSTICK_AXIS];            // set by joystick events
+	float joystickAxis[MAX_JOYSTICK_AXIS];            // set by joystick events
 
 	// cgame communicates a few values to the client system
 	int cgameUserCmdValue;              // current weapon to add to usercmd_t
 	int cgameUserHoldableValue;         // current holdable item to add to usercmd_t	//----(SA)	added
 	float cgameSensitivity;
 	int cgameCld;                       // NERVE - SMF
+	qboolean cgameIsZoomed;
 
 	// cmds[cmdNumber] is the predicted command, [cmdNumber-1] is the last
 	// properly generated command
@@ -417,6 +418,9 @@ extern cvar_t  *cl_recoilPitch;     // RF
 extern cvar_t  *cl_sensitivity;
 extern cvar_t  *cl_freelook;
 
+extern cvar_t  *cl_zoomSensitivity;
+extern cvar_t  *cl_zoomSensitivityFovScaled;
+
 extern cvar_t  *cl_mouseAccel;
 extern	cvar_t	*cl_mouseAccelOffset;
 extern	cvar_t	*cl_mouseAccelStyle;
@@ -438,6 +442,13 @@ extern	cvar_t	*j_yaw_axis;
 extern	cvar_t	*j_forward_axis;
 extern	cvar_t	*j_side_axis;
 extern	cvar_t	*j_up_axis;
+
+extern cvar_t   *j_moveSens;
+extern cvar_t   *j_lookSens;
+
+extern cvar_t   *j_uiSpeed;
+extern cvar_t   *j_uiExpo;
+extern cvar_t   *j_uiDeadzone;
 
 extern cvar_t  *cl_timedemo;
 extern	cvar_t	*cl_aviFrameRate;
@@ -581,6 +592,7 @@ void CL_ShutdownInput( void );
 void CL_SendCmd( void );
 void CL_ClearState( void );
 void CL_ReadPackets( void );
+void CL_GamepadUIMouseMove(void);
 
 void CL_WritePacket( void );
 void IN_CenterView( void );

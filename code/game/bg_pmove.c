@@ -3353,7 +3353,7 @@ static void PM_Weapon( void ) {
 				if ( item && ( pm->ps->holdable[pm->cmd.holdable] >= item->quantity ) ) { // ->quantity being how much 'ammo' is taken per use
 					PM_AddEvent( EV_USE_ITEM0 + pm->cmd.holdable );
 					// don't take books away when used
-					if ( pm->cmd.holdable < HI_BOOK1 || pm->cmd.holdable > HI_BOOK3 ) {
+					if ( pm->cmd.holdable < HI_BOOK1 || pm->cmd.holdable > HI_BOOK4 ) {
 						pm->ps->holdable[ pm->cmd.holdable ] -= item->quantity;
 					}
 
@@ -3540,6 +3540,7 @@ static void PM_Weapon( void ) {
 		if ( ( pm->ps->pm_flags & PMF_SPRINTING ) && ( pm->ps->sprintTime > 0 ) ){
 			if ( pm->ps->weaponstate != WEAPON_SPRINT_IN ) {
 				pm->ps->weaponstate = WEAPON_SPRINT_IN;
+				PM_AddEvent( EV_RESET_ZOOM );
 				PM_StartWeaponAnim(PM_SprintInAnimForWeapon(pm->ps->weapon));
 				pm->ps->weaponTime += 300;
 			}

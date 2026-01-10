@@ -2563,7 +2563,7 @@ qboolean Item_TextField_HandleKey( itemDef_t *item, int key ) {
 			}
 		}
 
-		if ( key == K_TAB || key == K_DOWNARROW || key == K_KP_DOWNARROW || K_PAD0_DPAD_DOWN ) {
+		if ( key == K_TAB || key == K_DOWNARROW || key == K_KP_DOWNARROW || key == K_PAD0_DPAD_DOWN ) {
 			newItem = Menu_SetNextCursorItem( item->parent );
 			if ( newItem && ( newItem->type == ITEM_TYPE_EDITFIELD || newItem->type == ITEM_TYPE_NUMERICFIELD || newItem->type == ITEM_TYPE_VALIDFILEFIELD ) ) {
 				g_editItem = newItem;
@@ -2578,14 +2578,14 @@ qboolean Item_TextField_HandleKey( itemDef_t *item, int key ) {
 		}
 
 		// NERVE - SMF
-		if ( key == K_ENTER || key == K_KP_ENTER || key == K_PAD0_A  ) {
+		if ( key == K_ENTER || key == K_KP_ENTER ) {
 			if ( item->onAccept ) {
 				Item_RunScript( item, item->onAccept );
 			}
 		}
 		// -NERVE - SMF
 
-		if ( key == K_ENTER || key == K_KP_ENTER || key == K_ESCAPE || key == K_PAD0_A  ) {
+		if ( key == K_ENTER || key == K_KP_ENTER || key == K_ESCAPE ) {
 			return qfalse;
 		}
 

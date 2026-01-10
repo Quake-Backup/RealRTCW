@@ -355,6 +355,7 @@ void UseHoldableItem( gentity_t *ent, int item ) {
 	case HI_BOOK1:
 	case HI_BOOK2:
 	case HI_BOOK3:
+	case HI_BOOK4:
 	if ( !g_cheats.integer ) 
 	{
 	    steamSetAchievement("ACH_READ_BOOK");
@@ -1695,7 +1696,7 @@ void FinishSpawningItem( gentity_t *ent ) {
 
 		ent->touch = Touch_Item;    // no auto-pickup, only activate
 	} else if ( ent->item->giType == IT_HOLDABLE )      {
-		if ( ent->item->giTag >= HI_BOOK1 && ent->item->giTag <= HI_BOOK3 ) {
+		if ( ent->item->giTag >= HI_BOOK1 && ent->item->giTag <= HI_BOOK4 ) {
 			G_FindConfigstringIndex( va( "hbook%d", ent->item->giTag - HI_BOOK1 ), CS_CLIPBOARDS, MAX_CLIPBOARD_CONFIGSTRINGS, qtrue );
 		}
 //		ent->touch = Touch_Item;	// no auto-pickup, only activate
@@ -2206,4 +2207,32 @@ void G_RunItem( gentity_t *ent ) {
 
 	G_BounceItem( ent, &tr );
 }
+
+/*
+=================
+G_DropSpecifiedItem
+
+Drops any item specified by gitem_t*.
+- lifetimeMs: 0 means "forever" (like SP weapon drops).
+=================
+*/
+gentity_t *G_DropSpecifiedItem( gentity_t *ent, gitem_t *item, int lifetimeMs ) {
+	gentity_t *drop;
+
+	if ( !ent || !ent->client || !item ) {
+		return NULL;
+	}
+
+	drop = Drop_Item( ent, item, 0, qfalse );
+	if ( drop ) {
+		if ( lifetimeMs > 0 ) {
+			drop->nextthink = level.time + lifetimeMs;
+		} else {
+			drop->nextthink = 0;
+		}
+	}
+
+	return drop;
+}
+
 

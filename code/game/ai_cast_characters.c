@@ -703,6 +703,35 @@ AICharacterDefaults_t aiDefaults[NUM_CHARACTERS] = {
 		AISTATE_ALERT
 	},
 
+
+	//AICHAR_MERCENARY
+	{
+		"Mercenary",
+		{ // Default
+			0
+		},
+		{
+			"mercSightPlayer",
+			"mercAttackPlayer",
+			"mercOrders",
+			"mercDeath",
+			"mercSilentDeath",				//----(SA)	added
+			"mercFlameDeath",				//----(SA)	added
+			"mercPain",
+			"mercStay",						// stay - you're told to stay put
+			"mercFollow",					// follow - go with ordering player ("i'm with you" rather than "yes sir!")
+			"mercOrdersDeny",				// deny - refuse orders (doing something else)
+		},
+		AITEAM_NAZI,							// team
+		"merc/default",					// default model/skin
+		{WP_MP40,WP_GRENADE_LAUNCHER},			// starting weapons
+		BBOX_SMALL, {32,48},					// bbox, crouch/stand height
+		AIFL_CATCH_GRENADE | AIFL_STAND_IDLE2,	// flags
+		0, 0, 0,								// special attack routine
+		NULL,									// looping sound
+		AISTATE_RELAXED
+	},
+
 };
 //---------------------------------------------------------------------------
 
@@ -1714,6 +1743,27 @@ void SP_ai_loper_special( gentity_t *ent ) {
 	level.loperZapSound = G_SoundIndex( "loperZap" );
 }
 
+
+//----------------------------------------------------------------------------------------------------------------------------
+/*QUAKED ai_mercenary (1 0.25 0) (-16 -16 -24) (16 16 64) TriggerSpawn NoRevive
+soldier entity
+"skin" the .skin file to use for this character (must exist in the player characters directory, otherwise 'infantryss/default' is used)
+"head" the .skin file to use for his head (must exist in the pc's dir, otherwise 'default' is used)
+"ainame" name of AI
+*/
+/*
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models\mapobjects\characters\test\nazi.md3"
+*/
+/*
+============
+SP_ai_mercenary
+============
+*/
+void SP_ai_mercenary( gentity_t *ent ) {
+	AICast_DelayedSpawnCast( ent, AICHAR_MERCENARY );
+}
+
 // Load behavior parameters from .aidefaults file
 void AI_LoadBehaviorTable( AICharacters_t characterNum )
 {
@@ -1774,6 +1824,7 @@ char *BG_GetCharacterFilename( AICharacters_t characterNum )
 		case AICHAR_DOG:               return "dog.aidefaults";
 		case AICHAR_PRIEST:            return "priest.aidefaults";
 		case AICHAR_XSHEPHERD:         return "xshepherd.aidefaults";
+		case AICHAR_MERCENARY:         return "merc.aidefaults";
 		case AICHAR_NONE:              return "";
 		default:                       Com_Printf( "Missing filename entry for character id %d\n", characterNum );
     }

@@ -128,6 +128,7 @@ static void CG_UseItem( centity_t *cent ) {
 				case HI_BOOK1:
 				case HI_BOOK2:
 				case HI_BOOK3:
+				case HI_BOOK4:
 					break;
 				case HI_ADRENALINE:
 					CG_CenterPrint( "usedadrenaline", SCREEN_HEIGHT - ( SCREEN_HEIGHT * 0.25 ), SMALLCHAR_WIDTH );
@@ -164,6 +165,7 @@ static void CG_UseItem( centity_t *cent ) {
 	case HI_BOOK1:
 	case HI_BOOK2:
 	case HI_BOOK3:
+	case HI_BOOK4:
 		trap_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.bookSound );
 		break;
 
@@ -1808,6 +1810,7 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 
 case EV_FILL_CLIP:
     DEBUGNAME( "EV_FILL_CLIP" );
+	CG_ResetSimpleZoom();
     if ( cg_weapons[es->weapon].reloadSound ) {
         if ( cg.predictedPlayerState.perks[PERK_WEAPONHANDLING] ) {
             trap_S_StartSoundEx( NULL, es->number, CHAN_WEAPON, cg_weapons[es->weapon].reloadSoundFast, SND_REQUESTCUT );
@@ -1818,6 +1821,7 @@ case EV_FILL_CLIP:
     break;
 case EV_FILL_CLIP_FULL:
     DEBUGNAME( "EV_FILL_CLIP_FULL" );
+	CG_ResetSimpleZoom();
     if ( cg_weapons[es->weapon].reloadFullSound ) {
         if (cg.predictedPlayerState.perks[PERK_WEAPONHANDLING] ) {
             trap_S_StartSoundEx( NULL, es->number, CHAN_WEAPON, cg_weapons[es->weapon].reloadFullSoundFast, SND_REQUESTCUT );
@@ -1832,7 +1836,10 @@ case EV_FILL_CLIP_FULL:
 			trap_S_StartSoundEx( NULL, es->number, CHAN_WEAPON, cg_weapons[es->weapon].reloadSoundAi, SND_REQUESTCUT );
 		}
 		break;
-
+	case EV_RESET_ZOOM:
+	    DEBUGNAME( "EV_RESET_ZOOM" );
+		CG_ResetSimpleZoom();
+		break;
 	case EV_M97_PUMP:
 		DEBUGNAME("EV_M97_PUMP");
 		// Jaymod
@@ -1848,6 +1855,7 @@ case EV_FILL_CLIP_FULL:
 
 	case EV_NOAMMO:
 		DEBUGNAME( "EV_NOAMMO" );
+		CG_ResetSimpleZoom();
 		if ( ( es->weapon != WP_GRENADE_LAUNCHER ) && ( es->weapon != WP_GRENADE_PINEAPPLE ) && ( es->weapon != WP_SMOKE_BOMB ) && ( es->weapon != WP_DYNAMITE )  && ( es->weapon != WP_DYNAMITE_ENG ) && ( es->weapon != WP_AIRSTRIKE ) && ( es->weapon != WP_POISONGAS ) && ( es->weapon != WP_POISONGAS_MEDIC )  ) {
 			trap_S_StartSound( NULL, es->number, CHAN_AUTO, cgs.media.noAmmoSound );
 		}
@@ -1866,6 +1874,8 @@ case EV_FILL_CLIP_FULL:
 		int newweap = 0;
 
 		DEBUGNAME( "EV_CHANGE_WEAPON" );
+
+		CG_ResetSimpleZoom();
 
 		// client will get this message if reloading while using an alternate weapon
 		// client should voluntarily switch back to primary at that point
@@ -2003,6 +2013,14 @@ case EV_FILL_CLIP_FULL:
 		break;
 	case EV_USE_ITEM14:
 		DEBUGNAME( "EV_USE_ITEM14" );
+		CG_UseItem( cent );
+		break;
+	case EV_USE_ITEM15:
+		DEBUGNAME( "EV_USE_ITEM15" );
+		CG_UseItem( cent );
+		break;
+	case EV_USE_ITEM16:
+		DEBUGNAME( "EV_USE_ITEM16" );
 		CG_UseItem( cent );
 		break;
 
