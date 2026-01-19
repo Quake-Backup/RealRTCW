@@ -318,6 +318,7 @@ typedef struct {
 	int soldierChargeTime;
 	int engineerChargeTime;
 	int medicChargeTime;
+	int cvopsChargeTime;
 
 	int gametype;
 
@@ -336,7 +337,8 @@ int Pmove( pmove_t *pmove );
 #define PC_SOLDIER              1   
 #define PC_MEDIC                2   
 #define PC_ENGINEER             3   
-#define PC_LT                   4   
+#define PC_LT                   4
+#define PC_CVOPS                5   
 #define PC_MEDIC_CHARGETIME     30000 
 
 
@@ -569,6 +571,7 @@ typedef enum {
 	WP_SMOKETRAIL,          
 	WP_HOLYCROSS,
 	WP_SMOKE_BOMB,
+	WP_SMOKE_BOMB_CVOPS,
 	// Alt Modes
 	WP_SNIPERRIFLE, 
     WP_SNOOPERSCOPE,
@@ -1044,9 +1047,11 @@ extern char *animStringsOld[];      // defined in bg_misc.c
 typedef enum
 {
 	HIT_NONE = 0,
-	HIT_TEAMSHOT,
+	HIT_BODYSHOT,
 	HIT_HEADSHOT,
-	HIT_BODYSHOT
+	HIT_TEAMSHOT,
+	HIT_DEATHSHOT,		// this shot killed the enemy
+	HIT_MAX_NUM
 } hitEvent_t;
 
 typedef enum {

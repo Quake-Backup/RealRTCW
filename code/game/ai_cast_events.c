@@ -171,7 +171,7 @@ AICast_Die
 */
 void AICast_Die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath ) {
 
-	if (g_gametype.integer == GT_SURVIVAL) {
+	if (g_gametype.integer == GT_SURVIVAL && !self->oneshot) {
 		AICast_Die_Survival(self, inflictor, attacker, damage, meansOfDeath);
 		return;
 	}
@@ -765,7 +765,7 @@ void AICast_RecordScriptSound( int client ) {
 	cs->lastScriptSound = level.time;
 }
 
-gentity_t* G_FindMissile( gentity_t* start, weapon_t weap ) {
+gentity_t* G_FindMissile2( gentity_t* start, weapon_t w1, weapon_t w2 ) {
 	int i = start ? ( start - g_entities ) + 1 : 0;
 	gentity_t* ent = &g_entities[i];
 
@@ -774,7 +774,7 @@ gentity_t* G_FindMissile( gentity_t* start, weapon_t weap ) {
 			continue;
 		}
 
-		if ( ent->s.weapon != weap ) {
+		if ( ent->s.weapon != w1 && ent->s.weapon != w2 ) {
 			continue;
 		}
 
@@ -785,5 +785,5 @@ gentity_t* G_FindMissile( gentity_t* start, weapon_t weap ) {
 }
 
 gentity_t* G_FindSmokeBomb( gentity_t* start ) {
-	return G_FindMissile( start, WP_SMOKE_BOMB );
+	return G_FindMissile2( start, WP_SMOKE_BOMB, WP_SMOKE_BOMB_CVOPS );
 }

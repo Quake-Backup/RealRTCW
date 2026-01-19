@@ -144,6 +144,7 @@ vmCvar_t g_medicChargeTime;
 vmCvar_t g_engineerChargeTime;
 vmCvar_t g_LTChargeTime;
 vmCvar_t g_soldierChargeTime;
+vmCvar_t g_cvopsChargeTime;
 // jpw
 
 vmCvar_t g_playerStart;         // set when the player enters the game
@@ -229,16 +230,18 @@ cvarTable_t gameCvarTable[] = {
 	// JPW NERVE multiplayer stuffs
 	{&g_redlimbotime, "g_redlimbotime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
 	{&g_bluelimbotime, "g_bluelimbotime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
-	{&g_medicChargeTime, "g_medicChargeTime", "45000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
-	{&g_engineerChargeTime, "g_engineerChargeTime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
 	{&g_jumptime, "g_jumptime", "1", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
 	{&g_fireonthemove, "g_fireonthemove", "0", CVAR_ARCHIVE, 0, qfalse},
 	{&g_spawndogs, "g_spawndogs", "1", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse},
 	{&g_spawnpriests, "g_spawnpriests", "1", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse},
 	{&g_spawnxshepherds, "g_spawnxshepherds", "1", CVAR_ARCHIVE | CVAR_LATCH, 0, qfalse},
 	{&g_aicanheadshot, "g_aicanheadshot", "1", CVAR_ARCHIVE, 0, qfalse},
-	{&g_LTChargeTime, "g_LTChargeTime", "35000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
-	{&g_soldierChargeTime, "g_soldierChargeTime", "20000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
+	
+	{&g_LTChargeTime, "g_LTChargeTime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
+	{&g_cvopsChargeTime, "g_cvopsChargeTime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
+	{&g_medicChargeTime, "g_medicChargeTime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
+	{&g_engineerChargeTime, "g_engineerChargeTime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
+	{&g_soldierChargeTime, "g_soldierChargeTime", "30000", CVAR_SERVERINFO | CVAR_LATCH, 0, qfalse},
 	// jpw
 
 	{&g_playerStart, "g_playerStart", "0", CVAR_ROM, 0, qfalse},
@@ -475,6 +478,7 @@ void G_EndGame( void ) {
 #define CH_ACTIVATE_DIST    96
 #define CH_EXIT_DIST        256
 #define CH_FRIENDLY_DIST    1024    // distance at which you can identify if someone is a friend
+#define CH_ENEMY_DIST       4096    // distance at which you can identify if someone is an enemy
 
 #define CH_MAX_DIST         1024    // use the largest value from above
 #define CH_MAX_DIST_ZOOM    8192    // max dist for zooming hints
@@ -542,15 +546,89 @@ void G_CheckForCursorHints( gentity_t *ent ) {
 	//----(SA)	modified to use shared routine for finding start point
 	CalcMuzzlePointForActivate( ent, forward, right, up, offset );
 
-	if ( zooming ) {
-		VectorMA( offset, CH_MAX_DIST_ZOOM, forward, end );
-	} else {
-		VectorMA( offset, CH_MAX_DIST, forward, end );
-	}
-
 	tr = &ps->serverCursorHintTrace;
-	trace_contents = ( CONTENTS_TRIGGER | CONTENTS_SOLID | CONTENTS_PLAYERCLIP | CONTENTS_BODY | CONTENTS_CORPSE );   // SP fine checking corpses
-	trap_Trace( tr, offset, NULL, NULL, end, ps->clientNum, trace_contents );
+	trace_contents = ( CONTENTS_TRIGGER | CONTENTS_SOLID | CONTENTS_PLAYERCLIP | CONTENTS_BODY | CONTENTS_CORPSE );
+
+	// Pass 1: normal hint trace (short range unless zooming)
+	// Pass 2: if nothing hit and NOT zooming, trace farther for people ID
+	// ------------------------------------------------------------
+	{
+		float traceMax;
+
+		// Pass 1 range
+		traceMax = zooming ? CH_MAX_DIST_ZOOM : CH_MAX_DIST;
+		VectorMA(offset, traceMax, forward, end);
+		trap_Trace(tr, offset, NULL, NULL, end, ps->clientNum, trace_contents);
+
+		traceEnt = &g_entities[tr->entityNum];
+
+		// ignore trigger_hurt (same logic as your original, but now respects traceMax)
+		if (traceEnt->classname && Q_stricmp(traceEnt->classname, "trigger_hurt") == 0)
+		{
+			trap_Trace(tr, tr->endpos, NULL, NULL, end, tr->entityNum, trace_contents);
+
+			// muzzle and trigger_hurt are in player bbox?
+			if (tr->entityNum == ps->clientNum)
+			{
+				tr->entityNum = ENTITYNUM_NONE;
+				tr->fraction = 1;
+			}
+
+			traceEnt = &g_entities[tr->entityNum];
+		}
+
+		// Pass 2: only if not zooming and we hit nothing
+		// (lets enemy/friendly identification work beyond CH_MAX_DIST)
+		if (!zooming && tr->fraction == 1.0f)
+		{
+			traceMax = CH_ENEMY_DIST; // people-identification range
+			VectorMA(offset, traceMax, forward, end);
+			trap_Trace(tr, offset, NULL, NULL, end, ps->clientNum, trace_contents);
+
+			traceEnt = &g_entities[tr->entityNum];
+
+			// also ignore trigger_hurt on the long trace
+			if (traceEnt->classname && Q_stricmp(traceEnt->classname, "trigger_hurt") == 0)
+			{
+				trap_Trace(tr, tr->endpos, NULL, NULL, end, tr->entityNum, trace_contents);
+
+				if (tr->entityNum == ps->clientNum)
+				{
+					tr->entityNum = ENTITYNUM_NONE;
+					tr->fraction = 1;
+				}
+
+				traceEnt = &g_entities[tr->entityNum];
+			}
+		}
+
+		// reset all
+		hintType = ps->serverCursorHint = HINT_NONE;
+		hintVal = ps->serverCursorHintVal = 0;
+
+		// Compute dist using the same range that produced this trace result.
+		if (zooming)
+		{
+			// zooming always used CH_MAX_DIST_ZOOM in pass 1
+			dist = tr->fraction * CH_MAX_DIST_ZOOM;
+			hintDist = CH_MAX_DIST_ZOOM;
+		}
+		else
+		{
+			// not zooming: could be CH_MAX_DIST (pass 1) OR CH_ENEMY_DIST (pass 2)
+			// If pass 1 hit something, traceMax is CH_MAX_DIST.
+			// If pass 1 hit nothing and pass 2 ran, traceMax is CH_ENEMY_DIST.
+			// We can detect which by checking whether fraction==1 after pass1,
+			// but traceMax already holds the last used range.
+			dist = tr->fraction * traceMax;
+			hintDist = (int)traceMax;
+		}
+
+		if (tr->fraction == 1)
+		{
+			return;
+		}
+	}
 
 	traceEnt = &g_entities[tr->entityNum];
 
@@ -603,6 +681,23 @@ void G_CheckForCursorHints( gentity_t *ent ) {
 	//
 	else if ( tr->entityNum < MAX_CLIENTS ) {
 
+		// Don't show player/AI hints for dead bodies
+		if (traceEnt->client)
+		{
+			if (traceEnt->health <= 0 || traceEnt->client->ps.pm_type == PM_DEAD)
+			{
+				return; // leaves hintType as HINT_NONE (already reset above)
+			}
+		}
+		else
+		{
+			// Just in case: if somehow we traced something "clientnum-like" without client struct
+			if (traceEnt->health <= 0)
+			{
+				return;
+			}
+		}
+
 		if ( ent->s.weapon == WP_KNIFE ) {
 			vec3_t pforward, eforward;
 			qboolean canKnife = qfalse;
@@ -639,6 +734,10 @@ void G_CheckForCursorHints( gentity_t *ent ) {
    		        hintType = HINT_PLYR_FRIEND;
 			    hintDist = CH_FRIENDLY_DIST; 
 			}
+		} else if ( traceEnt->aiTeam == AITEAM_NAZI || traceEnt->aiTeam == AITEAM_MONSTER )
+		{
+   		        hintType = HINT_PLYR_ENEMY;
+			    hintDist = CH_ENEMY_DIST; 
 		}
 
 	}
@@ -795,7 +894,7 @@ void G_CheckForCursorHints( gentity_t *ent ) {
 						hintType = HINT_DOOR_ROTATING;
 
 						if ( checkEnt->key >= KEY_LOCKED_TARGET ) {    // locked
-							//						hintType = HINT_DOOR_ROTATING_LOCKED;
+									hintType = HINT_DOOR_ROTATING_LOCKED;
 						}
 					}
 				} else if ( !Q_stricmp( checkEnt->classname, "func_door" ) )         {
@@ -806,7 +905,7 @@ void G_CheckForCursorHints( gentity_t *ent ) {
 						hintType = HINT_DOOR;
 
 						if ( checkEnt->key >= KEY_LOCKED_TARGET ) {    // locked
-							//						hintType = HINT_DOOR_LOCKED;
+									hintType = HINT_DOOR_LOCKED;
 						}
 					}
 				} else if ( !Q_stricmp( checkEnt->classname, "func_button" ) )         {

@@ -447,6 +447,7 @@ struct gentity_s {
 	int isWeapon;    
 	int wave;				   // wave number, survival mode   
 	int lastPainMOD; // last meansOfDeath used in pain function        
+	int oneshot;
 };
 
 // Ridah
@@ -1046,6 +1047,7 @@ void G_RunClient( gentity_t *ent );
 // g_team.c
 //
 qboolean OnSameTeam( gentity_t *ent1, gentity_t *ent2 );
+void G_FixupEntityTeamNum( gentity_t *ent );
 
 
 //
@@ -1235,6 +1237,7 @@ extern vmCvar_t g_medicChargeTime;
 extern vmCvar_t g_engineerChargeTime;
 extern vmCvar_t g_LTChargeTime;
 extern vmCvar_t g_soldierChargeTime;
+extern vmCvar_t g_cvopsChargeTime;
 // jpw
 
 extern vmCvar_t g_playerStart;      //----(SA)	added

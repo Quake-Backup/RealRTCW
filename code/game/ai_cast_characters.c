@@ -1229,7 +1229,7 @@ void AIChar_spawn( gentity_t *ent ) {
 	// create the character
 
 	// (there will always be an ent->aiSkin (SA)) AAAS
-	if (g_gametype.integer == GT_SURVIVAL)
+	if (g_gametype.integer == GT_SURVIVAL && !ent->oneshot )
 	{
 		BG_SetBehaviorForSurvival(ent->aiCharacter);
 	}
@@ -1256,9 +1256,11 @@ void AIChar_spawn( gentity_t *ent ) {
 	newent->spawnflags = ent->spawnflags;
 	newent->aiTeam = ent->aiTeam;
 	newent->canSpeak = ent->canSpeak;
+	newent->oneshot = ent->oneshot;
 	if ( newent->aiTeam < 0 ) {
 		newent->aiTeam = aiCharDefaults->aiTeam;
 	}
+	G_FixupEntityTeamNum( ent );
 	newent->client->ps.teamNum = newent->aiTeam;
 	//
 	// kill the old entity

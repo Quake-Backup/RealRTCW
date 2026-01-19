@@ -63,7 +63,7 @@ int weapBanks[MAX_WEAP_BANKS][MAX_WEAPS_IN_BANK] = {
 	{WP_G43, WP_M1GARAND, WP_M1941, 0, 0, 0},																  //	5
 	{WP_FG42, WP_MP44, WP_BAR, 0, 0, 0},																	  //	6
 	{WP_M97, WP_AUTO5, 0, 0, 0},																	  //	7
-	{WP_GRENADE_LAUNCHER, WP_GRENADE_PINEAPPLE, WP_DYNAMITE, WP_AIRSTRIKE, WP_POISONGAS, WP_SMOKE_BOMB, WP_POISONGAS_MEDIC, WP_DYNAMITE_ENG}, //	8
+	{WP_GRENADE_LAUNCHER, WP_GRENADE_PINEAPPLE, WP_DYNAMITE, WP_AIRSTRIKE, WP_POISONGAS, WP_SMOKE_BOMB, WP_POISONGAS_MEDIC, WP_DYNAMITE_ENG ,WP_SMOKE_BOMB_CVOPS}, //	8
 	{WP_PANZERFAUST, WP_FLAMETHROWER, WP_MG42M, WP_BROWNING, 0, 0},											  //	9
 	{WP_VENOM, WP_TESLA, 0, 0, 0, 0}																		  //	10
 };
@@ -3517,6 +3517,7 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 		 weaponNum == WP_KNIFE ||
 		 weaponNum == WP_DYNAMITE ||
 		 weaponNum == WP_DYNAMITE_ENG ||
+		 weaponNum == WP_SMOKE_BOMB_CVOPS ||
 		 weaponNum == WP_M7 ) {
 		return;
 	}
@@ -4487,6 +4488,7 @@ qboolean CG_WeaponSupportsSimpleZoom( int weap ) {
         case WP_GRENADE_PINEAPPLE:
         case WP_SMOKE_BOMB:
 		case WP_POISONGAS_MEDIC:
+		case WP_SMOKE_BOMB_CVOPS:
 		case WP_AIRSTRIKE:
         case WP_DYNAMITE:
         case WP_DYNAMITE_ENG:
@@ -4566,7 +4568,6 @@ void CG_AltWeapon_f( void ) {
 			{
 				return;
 			}
-
 			CG_ToggleSimpleZoom();
 		}
 		return;
@@ -6896,4 +6897,202 @@ void CG_ClientDamage( int entnum, int enemynum, int id ) {
 	}
 	trap_SendClientCommand( va( "cld %i %i %i", entnum, enemynum, id ) );
 }
+
+
+static qboolean CG_AA_ValidateTarget( int entNum ) {
+    if ( entNum == ENTITYNUM_WORLD || entNum < 0 ) {
+        return qfalse;
+    }
+
+    // Only characters
+    if ( cg_entities[ entNum ].currentState.eType != ET_PLAYER ) {
+        return qfalse;
+    }
+
+    // Reject invis
+    if ( cg_entities[ entNum ].currentState.powerups & ( 1 << PW_INVIS ) ) {
+        return qfalse;
+    }
+
+	{
+		int myTeam = cg.snap->ps.persistant[PERS_TEAM];
+		int hisTeam = cg_entities[entNum].currentState.teamNum;
+
+		// If hisTeam is known and equals ours -> friendly, reject
+		if (hisTeam != 0 && hisTeam == myTeam)
+		{
+			return qfalse;
+		}
+	}
+
+	// LOS check (prevents through-walls)
+    {
+        trace_t los;
+        vec3_t target;
+
+        VectorCopy( cg_entities[ entNum ].lerpOrigin, target );
+        target[2] += 30.0f; // chest-ish
+
+        CG_Trace( &los,
+                  cg.refdef.vieworg,
+                  vec3_origin, vec3_origin,
+                  target,
+                  cg.snap->ps.clientNum,
+                  CONTENTS_SOLID );
+
+        if ( los.fraction < 0.999f ) {
+            return qfalse;
+        }
+    }
+
+    return qtrue;
+}
+
+
+void CG_UpdateAimAssist( void ) {
+    cg.aaStrength = 0.0f;
+    cg.aaDYaw     = 0.0f;
+    cg.aaDPitch   = 0.0f;
+    cg.aaEntNum   = -1;
+
+    if ( !cg.snap ) {
+        return;
+    }
+    if ( cg.renderingThirdPerson ) {
+        return;
+    }
+    if ( cg.snap->ps.persistant[PERS_TEAM] == TEAM_SPECTATOR ) {
+        return;
+    }
+
+
+	float coneDeg = 4.5f;
+	if (cg.zoomed)
+	{					
+		coneDeg = 6.0f; 
+	}
+
+	// Direction offset scalar for the cone
+    const float cone = tanf( coneDeg * ( M_PI / 180.0f ) );
+
+    vec3_t start;
+    VectorCopy( cg.refdef.vieworg, start );
+
+    // 9-sample: center + 4 cardinals + 4 diagonals
+    static const float samples[9][2] = {
+        { 0,  0 },   // center
+        { 1,  0 },   // right
+        { -1, 0 },   // left
+        { 0,  1 },   // up
+        { 0, -1 },   // down
+        { 1,  1 },   // up-right
+        { 1, -1 },   // down-right
+        { -1, 1 },   // up-left
+        { -1, -1 }   // down-left
+    };
+
+    int   bestEnt  = -1;
+    float bestFrac = 999.0f; // 0=center, 1=edge (normalized)
+
+    for ( int i = 0; i < 9; i++ ) {
+        vec3_t dir, end;
+
+        // dir = forward + right*(x*cone) + up*(y*cone)
+        VectorCopy( cg.refdef.viewaxis[0], dir );
+        VectorMA( dir, samples[i][0] * cone, cg.refdef.viewaxis[1], dir );
+        VectorMA( dir, samples[i][1] * cone, cg.refdef.viewaxis[2], dir );
+        VectorNormalize( dir );
+
+        VectorMA( start, 4096.0f, dir, end );
+
+        trace_t tr;
+        CG_Trace( &tr, start, vec3_origin, vec3_origin, end,
+                  cg.snap->ps.clientNum, CONTENTS_BODY );
+
+        if ( tr.entityNum == ENTITYNUM_WORLD ) {
+            continue;
+        }
+
+        if ( !CG_AA_ValidateTarget( tr.entityNum ) ) {
+            continue;
+        }
+
+        // Normalized distance from center:
+        // samples are in {0,1,sqrt(2)} so normalize by sqrt(2)
+        {
+            const float sx = samples[i][0];
+            const float sy = samples[i][1];
+            const float mag = sqrtf( sx*sx + sy*sy );            // 0, 1, 1.414
+            const float frac = mag / 1.41421356f;               // 0..1
+
+            // Prefer the closest-to-center hit. If tie, keep the earlier (center wins).
+            if ( frac < bestFrac ) {
+                bestFrac = frac;
+                bestEnt  = tr.entityNum;
+            }
+        }
+    }
+
+    if ( bestEnt < 0 ) {
+        return;
+    }
+
+    // Strength mapping:
+    // bestFrac: 0 (center) .. 1 (outer ring)
+    // Convert to strength in [0..1], with a floor so it engages near the target.
+    {
+		float s = 1.0f - bestFrac; // 0..1
+		s = s * s;				   // keep a curve (optional)
+		s = 0.20f + (s * 0.80f);   // floor 0.20 (tune 0.15..0.30)
+		if (s > 1.0f)
+			s = 1.0f;
+		cg.aaStrength = s;
+	}
+
+    cg.aaEntNum = bestEnt;
+
+    // Compute dyaw/dpitch in DEGREES using viewaxis directly (robust; no refdefViewAngles needed)
+    {
+        vec3_t target, to, toN;
+        float  yawErr, pitchErr;
+
+        VectorCopy( cg_entities[ bestEnt ].lerpOrigin, target );
+        target[2] += 30.0f; // chest-ish; tune later if you want head
+
+        VectorSubtract( target, cg.refdef.vieworg, to );
+        VectorCopy( to, toN );
+        VectorNormalize( toN );
+
+        // Forward/right/up axes
+        // viewaxis[0] = forward, [1] = right, [2] = up
+        // Compute angular error around yaw and pitch from dot products.
+        // yaw error: angle in the plane (forward/right)
+        // pitch error: angle in the plane (forward/up)
+        {
+            float f = DotProduct( toN, cg.refdef.viewaxis[0] );
+            float r = DotProduct( toN, cg.refdef.viewaxis[1] );
+            float u = DotProduct( toN, cg.refdef.viewaxis[2] );
+
+            // atan2 gives signed angle in radians; convert to degrees
+            yawErr   = atan2f( r, f ) * ( 180.0f / M_PI );
+            pitchErr = -atan2f( u, f ) * ( 180.0f / M_PI ); // minus so positive pitch means look up (typical)
+        }
+
+        cg.aaDYaw   = yawErr;    // degrees, signed
+        cg.aaDPitch = pitchErr;  // degrees, signed
+    }
+
+    // Smooth strength (prevents flicker)
+    {
+        float targetS = cg.aaStrength;
+        float rateUp  = 0.35f;   // faster lock
+        float rateDn  = 0.20f;   // slower release
+
+        float rate = ( targetS > cg.aaStrengthSmoothed ) ? rateUp : rateDn;
+        cg.aaStrengthSmoothed = cg.aaStrengthSmoothed + ( targetS - cg.aaStrengthSmoothed ) * rate;
+
+        cg.aaStrength = cg.aaStrengthSmoothed;
+    }
+}
+
 
