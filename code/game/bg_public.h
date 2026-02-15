@@ -457,6 +457,7 @@ typedef enum {
 
 typedef enum {
 	HI_NONE,
+	// draw in HUD
 	HI_WINE,
 	HI_ADRENALINE,
 	HI_BANDAGES,
@@ -467,6 +468,10 @@ typedef enum {
 	HI_EG_SYRINGE,
 	HI_BG_SYRINGE,
 	HI_LP_SYRINGE,
+	HI_CROSS,
+	// boundary marker
+	HI_HUD_VISIBLE_END,
+	// for special logic
 	HI_KNIVES,
 	HI_M97,
 	HI_AUTO5,
@@ -511,6 +516,7 @@ typedef enum
 	AICHAR_ZOMBIE_FLAME,
 	AICHAR_LOPER_SPECIAL,
 	AICHAR_MERCENARY,
+	AICHAR_TRENCH,
 	NUM_CHARACTERS
 } AICharacters_t;
 
@@ -567,11 +573,9 @@ typedef enum {
 	WP_AIRSTRIKE,
 	WP_ARTY,
 	WP_POISONGAS,
-	WP_POISONGAS_MEDIC,
 	WP_SMOKETRAIL,          
 	WP_HOLYCROSS,
 	WP_SMOKE_BOMB,
-	WP_SMOKE_BOMB_CVOPS,
 	// Alt Modes
 	WP_SNIPERRIFLE, 
     WP_SNOOPERSCOPE,
@@ -665,7 +669,6 @@ static const int autoReloadWeapons[] = {
 	WP_FLAMETHROWER,
 	WP_POISONGAS,
 	WP_AIRSTRIKE,
-	WP_POISONGAS_MEDIC,
 	WP_DYNAMITE_ENG,
 	WP_KNIFE,
 	WP_M7,

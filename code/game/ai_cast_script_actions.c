@@ -91,6 +91,33 @@ void AICast_NoAttackIfNotHurtSinceLastScriptAction( cast_state_t *cs ) {
 	}
 }
 
+// A few helpers for the prefix markers feature we're added for the gotomarker
+
+qboolean Q_StringStartsWith( const char *s, const char *prefix ) {
+    if ( !s || !prefix ) return qfalse;
+    while ( *prefix ) {
+        if ( tolower(*s) != tolower(*prefix) ) return qfalse;
+        s++; prefix++;
+    }
+    return qtrue;
+}
+
+int AICast_TravelTimeToPoint( cast_state_t *cs, const vec3_t goalOrg ) {
+    int fromArea = trap_AAS_PointAreaNum( cs->bs->origin );
+    int toArea   = trap_AAS_PointAreaNum( (float *)goalOrg );
+
+    if ( fromArea <= 0 || toArea <= 0 ) {
+        return 0;
+    }
+
+    return trap_AAS_AreaTravelTimeToGoalArea(
+        fromArea,
+        cs->bs->origin,
+        toArea,
+        cs->travelflags
+    );
+}
+
 /*
 ===============
 AICast_ScriptAction_GotoMarker
@@ -105,6 +132,9 @@ qboolean AICast_ScriptAction_GotoMarker( cast_state_t *cs, char *params ) {
 	vec3_t vec, org;
 	int i, diff;
 	qboolean slowApproach;
+	qboolean groupMode = qfalse;
+	char prefix[64];
+	int prefixLen;
 
 	ent = NULL;
 
@@ -126,7 +156,9 @@ qboolean AICast_ScriptAction_GotoMarker( cast_state_t *cs, char *params ) {
 	// if we already are going to the marker, just use that, and check if we're in range
 	if ( cs->castScriptStatus.scriptGotoEnt >= 0 && cs->castScriptStatus.scriptGotoId == cs->thinkFuncChangeTime ) {
 		ent = &g_entities[cs->castScriptStatus.scriptGotoEnt];
-		if ( ent->targetname && !Q_strcasecmp( ent->targetname, token ) ) {
+		if (cs->castScriptStatus.scriptGotoIsGroup ||
+			(ent->targetname && !Q_strcasecmp(ent->targetname, token)))
+		{
 			// if we're not slowing down, then check for passing the marker, otherwise check distance only
 			VectorSubtract( ent->r.currentOrigin, cs->bs->origin, vec );
 			//
@@ -188,24 +220,81 @@ qboolean AICast_ScriptAction_GotoMarker( cast_state_t *cs, char *params ) {
 				cs->followTime = level.time + 500;
 				return qfalse;
 			}
-		} else
+		}
+		else
 		{
 			ent = NULL;
 		}
 	}
 
-	// find the ai_marker with the given "targetname"
+    Q_strncpyz( prefix, token, sizeof(prefix) );
 
-	while ( ( ent = G_Find( ent, FOFS( classname ), "ai_marker" ) ) )
-	{
-		if ( ent->targetname && !Q_strcasecmp( ent->targetname, token ) ) {
-			break;
-		}
-	}
+    prefixLen = strlen(prefix);
+    if ( prefixLen > 0 && prefix[prefixLen - 1] == '*' ) {
+        groupMode = qtrue;
+        prefix[prefixLen - 1] = '\0'; // strip '*'
+    }
 
-	if ( !ent ) {
-		G_Error( "AI Scripting: gotomarker can't find ai_marker with \"targetname\" = \"%s\"\n", token );
-	}
+    ent = NULL;
+
+    if ( !groupMode ) {
+        // original exact match behavior
+        while ( ( ent = G_Find( ent, FOFS( classname ), "ai_marker" ) ) ) {
+            if ( ent->targetname && !Q_strcasecmp( ent->targetname, prefix ) ) {
+                break;
+            }
+        }
+    } else {
+        // group/prefix mode: pick best marker at runtime
+        gentity_t *best = NULL;
+        int bestTT = 0x7fffffff;
+        float bestDistSq = 0.0f;
+        qboolean haveTT = qfalse;
+
+        while ( ( ent = G_Find( ent, FOFS( classname ), "ai_marker" ) ) ) {
+            vec3_t org;
+            vec3_t d;
+            float distSq;
+            int tt;
+
+            if ( !ent->targetname ) continue;
+            if ( !Q_StringStartsWith( ent->targetname, prefix ) ) continue;
+
+            // Evaluate marker origin for cost
+            VectorCopy( ent->r.currentOrigin, org );
+
+            tt = AICast_TravelTimeToPoint( cs, org );
+            if ( tt > 0 ) {
+                // Prefer travel time (AAS)
+                if ( tt < bestTT ) {
+                    bestTT = tt;
+                    best = ent;
+                    haveTT = qtrue;
+                }
+            } else if ( !haveTT ) {
+                // Fallback: distance only if we have no travel time candidates
+                VectorSubtract( org, cs->bs->origin, d );
+                distSq = VectorLengthSquared( d );
+                if ( !best || distSq < bestDistSq ) {
+                    bestDistSq = distSq;
+                    best = ent;
+                }
+            }
+        }
+
+        ent = best;
+    }
+
+    if ( !ent ) {
+        if ( !groupMode ) {
+            G_Error( "AI Scripting: gotomarker can't find ai_marker with \"targetname\" = \"%s\"\n", prefix );
+        } else {
+            G_Error( "AI Scripting: gotomarker can't find ai_marker with prefix \"%s*\"\n", prefix );
+        }
+    }
+
+    // Remember which mode we used, so the cached section doesn't compare exact name
+    cs->castScriptStatus.scriptGotoIsGroup = groupMode;
 
 	if ( Distance( cs->bs->origin, ent->r.currentOrigin ) < SCRIPT_REACHGOAL_DIST ) { // we made it
 		return qtrue;
@@ -457,6 +546,171 @@ qboolean AICast_ScriptAction_CrouchToCast( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
+// DEFENSE ACTIONS //
+
+static void AICast_Defend_ClearCombat( cast_state_t *cs ) {
+    cs->enemyNum = -1;
+    cs->lastEnemy = -1;
+
+    // kill any “go chase” intentions
+    cs->combatGoalTime = 0;
+    cs->battleHuntPauseTime = 0;
+    VectorClear( cs->takeCoverPos );
+}
+
+
+qboolean AICast_ScriptAction_Defend( cast_state_t *cs, char *params ) {
+    char *pString = params;
+    char *token;
+    gentity_t *marker = NULL;
+    float radius = 320.0f;
+    int timeout = 0;
+
+    if ( !params || !params[0] ) {
+        G_Error( "AI Scripting:defend without parameters\n" );
+    }
+
+    // markername
+    token = COM_ParseExt( &pString, qfalse );
+    if ( !token[0] ) {
+        G_Error( "AI Scripting: syntax: defend <markername> [radius] [timeout_ms]\n" );
+    }
+
+    marker = G_FindByTargetname( NULL, token );
+
+    if ( marker ) {
+        VectorCopy( marker->r.currentOrigin, cs->defendOrigin );
+    } else {
+        // fallback: current pos (still useful)
+        VectorCopy( cs->bs->origin, cs->defendOrigin );
+    }
+
+    // optional radius
+    token = COM_ParseExt( &pString, qfalse );
+    if ( token[0] ) radius = atof( token );
+
+    // optional timeout (ms)
+    token = COM_ParseExt( &pString, qfalse );
+    if ( token[0] ) timeout = atoi( token );
+
+    cs->defendActive = qtrue;
+    cs->defendRadius = radius;
+    cs->defendLeash  = radius + 128.0f; // slack so they can strafe/fight
+    cs->defendExpireTime = ( timeout > 0 ) ? ( level.time + timeout ) : 0;
+    cs->defendRepathTime = 0;
+
+	// if we're outside, explicitly enter return-to-defend mode
+	if (Distance(cs->bs->origin, cs->defendOrigin) > cs->defendRadius)
+	{
+		cs->defendReturning = qtrue;
+
+		// clear combat so he commits to returning smoothly
+		AICast_Defend_ClearCombat(cs);
+	}
+	else
+	{
+		cs->defendReturning = qfalse;
+	}
+
+	// IMPORTANT:
+    // Do NOT force some invented state. Just let the regular logic run.
+    AIFunc_DefaultStart( cs );
+
+    return qtrue;
+}
+
+qboolean AICast_ScriptAction_DefendStop( cast_state_t *cs, char *params ) {
+    cs->defendActive = qfalse;
+	cs->defendReturning = qfalse;
+    cs->defendExpireTime = 0;
+    cs->defendRepathTime = 0;
+    return qtrue;
+}
+
+qboolean AICast_Defend_Update( cast_state_t *cs ) {
+    float distFromHome;
+
+    if ( !cs->defendActive ) return qfalse;
+
+    // timeout
+    if ( cs->defendExpireTime && level.time >= cs->defendExpireTime ) {
+        cs->defendActive = qfalse;
+        cs->defendReturning = qfalse;
+        cs->defendExpireTime = 0;
+        return qfalse;
+    }
+
+    distFromHome = Distance( cs->bs->origin, cs->defendOrigin );
+
+    //
+    // 1) RETURNING MODE: stable navigation back home
+    //
+    if ( cs->defendReturning ) {
+
+        // Arrived?
+        if ( distFromHome <= ( cs->defendRadius * 0.75f ) ) {
+            cs->defendReturning = qfalse;
+            cs->defendRepathTime = 0;
+            return qfalse; // allow normal logic now
+        }
+
+        // While returning, don't chase enemies
+        if ( cs->enemyNum >= 0 ) {
+            if ( !AICast_CheckAttack( cs, cs->enemyNum, qfalse ) ) {
+                AICast_Defend_ClearCombat( cs );
+            }
+        }
+
+        // Drive movement smoothly
+        if ( cs->defendRepathTime < level.time ) {
+            cs->defendRepathTime = level.time + 300; // little tighter helps smoothness
+            AICast_MoveToPos( cs, cs->defendOrigin, -1 );
+        } else {
+            // still keep moving along existing move plan
+            AICast_MoveToPos( cs, cs->defendOrigin, -1 );
+        }
+
+        return qtrue; // handled
+    }
+
+    //
+    // 2) HARD LEASH: if pulled way out during combat, enter returning mode
+    //
+    if ( distFromHome > cs->defendLeash ) {
+        cs->defendReturning = qtrue;
+        AICast_Defend_ClearCombat( cs );
+        cs->defendRepathTime = 0;
+        return qtrue;
+    }
+
+    //
+    // 3) Enemy leash rule: don't chase targets outside leash
+    //
+    if ( cs->enemyNum >= 0 ) {
+        float enemyDistFromHome = Distance( g_entities[cs->enemyNum].r.currentOrigin, cs->defendOrigin );
+
+        if ( enemyDistFromHome > cs->defendLeash ) {
+            // If can't attack from here, drop and return to home logic
+            if ( !AICast_CheckAttack( cs, cs->enemyNum, qfalse ) ) {
+                AICast_Defend_ClearCombat( cs );
+            }
+        }
+    }
+
+    //
+    // 4) Soft radius: if idle and drifted out, enter returning mode (smoothly)
+    //
+    if ( cs->enemyNum < 0 && distFromHome > cs->defendRadius ) {
+        cs->defendReturning = qtrue;
+        cs->defendRepathTime = 0;
+        return qtrue;
+    }
+
+    return qfalse;
+}
+
+
+// DEFENSE ACTIONS END //
 
 /*
 ==============
@@ -625,16 +879,23 @@ qboolean AICast_ScriptAction_Trigger( cast_state_t *cs, char *params ) {
 		G_Error( "AI Scripting: trigger must have a name and an identifier\n" );
 	}
 
-	ent = AICast_FindEntityForName( token );
-	if ( !ent ) {
-		ent = G_Find( &g_entities[MAX_CLIENTS], FOFS( scriptName ), token );
+	// ---- self* support (minimal, safe, non-breaking)
+	// "self*" means: trigger this AI's own ainame
+	if ( !Q_stricmp( token, "self*" ) ) {
+		ent = &g_entities[ cs->entityNum ];
+	} else {
+		ent = AICast_FindEntityForName( token );
 		if ( !ent ) {
-			if ( trap_Cvar_VariableIntegerValue( "developer" ) ) {
-				G_Printf( "AI Scripting: trigger can't find AI cast with \"ainame\" = \"%s\"\n", params );
+			ent = G_Find( &g_entities[MAX_CLIENTS], FOFS( scriptName ), token );
+			if ( !ent ) {
+				if ( trap_Cvar_VariableIntegerValue( "developer" ) ) {
+					G_Printf( "AI Scripting: trigger can't find AI cast with \"ainame\" = \"%s\"\n", params );
+				}
+				return qtrue;
 			}
-			return qtrue;
 		}
 	}
+	// ---- end self* support
 
 	token = COM_ParseExt( &pString, qfalse );
 	if ( !token[0] ) {
@@ -661,6 +922,10 @@ AICast_ScriptAction_FollowCast
 */
 qboolean AICast_ScriptAction_FollowCast( cast_state_t *cs, char *params ) {
 	gentity_t *ent;
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: followcast requires ainame\n");
+	}
 
 	// find the cast/player with the given "name"
 	ent = AICast_FindEntityForName( params );
@@ -1156,12 +1421,18 @@ qboolean AICast_ScriptAction_SetClip( cast_state_t *cs, char *params ) {
 /*
 ==============
 AICast_ScriptAction_SuggestWeapon
+
+  syntax: suggestweapon <pickupname>
 ==============
 */
 qboolean AICast_ScriptAction_SuggestWeapon( cast_state_t *cs, char *params ) {
 	int weapon;
 	int i;
 	//int		suggestedweaps = 0; // TTimo: unused
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: suggestweapon requires pickupname\n");
+	}
 
 	weapon = WP_NONE;
 
@@ -1200,6 +1471,10 @@ AICast_ScriptAction_SelectWeapon
 qboolean AICast_ScriptAction_SelectWeapon( cast_state_t *cs, char *params ) {
 	int weapon;
 	int i;
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: selectweapon requires pickupname\n");
+	}
 
 	weapon = WP_NONE;
 
@@ -1348,6 +1623,10 @@ qboolean AICast_ScriptAction_GiveArmor( cast_state_t *cs, char *params ) {
 	int i;
 	gitem_t     *item = 0;
 
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: givearmor requires params\n");
+	}
+
 	for ( i = 1; bg_itemlist[i].classname; i++ ) {
 		//----(SA)	first try the name they see in the editor, then the pickup name
 		if ( !Q_strcasecmp( params, bg_itemlist[i].classname ) ) {
@@ -1385,6 +1664,10 @@ qboolean AICast_ScriptAction_GiveAmmo( cast_state_t *cs, char *params ) {
 	int i;
 	gitem_t     *item = 0;
 	int quantity;
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: giveammo requires pickupname\n");
+	}
 
 	for ( i = 1; bg_itemlist[i].classname; i++ ) {
 		//----(SA)	first try the name they see in the editor, then the pickup name
@@ -1482,6 +1765,10 @@ qboolean AICast_ScriptAction_GiveHealth( cast_state_t *cs, char *params ) {
 	int i;
 	gitem_t     *item = 0;
 
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: givehealth requires pickupname\n");
+	}
+
 	for ( i = 1; bg_itemlist[i].classname; i++ ) {
 		//----(SA)	first try the name they see in the editor, then the pickup name
 		if ( !Q_strcasecmp( params, bg_itemlist[i].classname ) ) {
@@ -1519,6 +1806,10 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 	int i;
 	gentity_t   *ent = &g_entities[cs->entityNum];
 	int slotId = G_GetFreeWeaponSlot( ent );
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: giveweapon requires pickupname\n");
+	}
 
 	weapon = WP_NONE;
 
@@ -1574,7 +1865,7 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		{
 			if (g_newinventory.integer > 0 || g_gametype.integer == GT_SURVIVAL)
 			{
-				if (weapon != WP_AIRSTRIKE && weapon != WP_ARTY && weapon != WP_POISONGAS_MEDIC && weapon != WP_DYNAMITE_ENG && weapon != WP_DYNAMITE && weapon != WP_SMOKE_BOMB_CVOPS) // Skip WP_AIRSTRIKE and WP_ARTY	
+				if (weapon != WP_AIRSTRIKE && weapon != WP_ARTY && weapon != WP_POISONGAS && weapon != WP_DYNAMITE_ENG && weapon != WP_DYNAMITE && weapon != WP_SMOKE_BOMB) // Skip WP_AIRSTRIKE and WP_ARTY	
 				{
 					if (ent->client->ps.stats[STAT_PLAYER_CLASS] == PC_SOLDIER)
 					{
@@ -1659,6 +1950,10 @@ qboolean AICast_ScriptAction_GiveWeaponFull( cast_state_t *cs, char *params ) {
     int tCount = 0;
     char *chosenParam;
     char *token;
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: giveweaponfull requires pickupname\n");
+	}
 
 	Q_strncpyz(localParams, params, sizeof(localParams));
 
@@ -1955,6 +2250,10 @@ qboolean AICast_ScriptAction_TakeWeapon( cast_state_t *cs, char *params ) {
 	int weapon;
 	int i;
 
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: takeweapon requires pickupname\n");
+	}
+
 	weapon = WP_NONE;
 
 	if ( !Q_stricmp( params, "all" ) ) {
@@ -2047,11 +2346,13 @@ AICast_ScriptAction_DropItem
 syntax:
   dropitem <classnameOrPickupName>
   dropitem <classnameOrPickupName> <lifetimeMs>
+  dropitem <classnameOrPickupName> <lifetimeMs> <dropChance>
 
 examples:
   dropitem item_armor_head
   dropitem weapon_mp40 30000
   dropitem item_treasure 45000
+  dropitem weapon_colt 0 20
 ==============
 */
 qboolean AICast_ScriptAction_DropItem( cast_state_t *cs, char *params ) {
@@ -2059,7 +2360,9 @@ qboolean AICast_ScriptAction_DropItem( cast_state_t *cs, char *params ) {
 	gitem_t *item;
 	char name[MAX_QPATH];
 	char lifeStr[32];
+	char probStr[4];
 	int lifetimeMs = 0;
+	int dropChance = 100;
 	int num;
 
 	if ( !cs ) {
@@ -2071,19 +2374,26 @@ qboolean AICast_ScriptAction_DropItem( cast_state_t *cs, char *params ) {
 		return qfalse;
 	}
 
-	// Parse: <name> [lifetimeMs]
+	// Parse: <name> [lifetimeMs] [dropChance]
 	name[0] = '\0';
 	lifeStr[0] = '\0';
+	probStr[0] = '\0';
 
-	num = sscanf( params, "%s %31s", name, lifeStr );
+	num = sscanf( params, "%s %31s %3s", name, lifeStr, probStr );
 	if ( num < 1 || !name[0] ) {
 		G_Error( "AI Scripting: dropitem - missing item name" );
 		return qfalse;
 	}
 
-	if ( num >= 2 && lifeStr[0] ) {
+	if ( num == 2 && lifeStr[0] ) {
 		lifetimeMs = atoi( lifeStr );
 		if ( lifetimeMs < 0 ) lifetimeMs = 0;
+	}
+
+	if ( num >= 3 && probStr[0] ) {
+		dropChance = atoi( probStr );
+		if ( dropChance < 0 ) dropChance = 0;
+		if ( dropChance > 100 ) dropChance = 100;
 	}
 
 	item = BG_FindItem2( name );
@@ -2092,7 +2402,7 @@ qboolean AICast_ScriptAction_DropItem( cast_state_t *cs, char *params ) {
 		return qfalse;
 	}
 
-	G_DropSpecifiedItem( ent, item, lifetimeMs );
+	G_DropSpecifiedItem( ent, item, lifetimeMs, dropChance );
 	return qtrue;
 }
 
@@ -2183,6 +2493,8 @@ qboolean AICast_ScriptAction_NoRespawn( cast_state_t *cs, char *params ) {
 /*
 ==============
 AICast_ScriptAction_GiveInventory
+
+ syntax: giveinventory <pickupname>
 ==============
 */
 qboolean AICast_ScriptAction_GiveInventory( cast_state_t *cs, char *params ) {
@@ -2221,6 +2533,8 @@ qboolean AICast_ScriptAction_GiveInventory( cast_state_t *cs, char *params ) {
 /*
 ==============
 AICast_ScriptAction_GivePerk
+
+ syntax: giveperk <pickupname>
 ==============
 */
 qboolean AICast_ScriptAction_GivePerk( cast_state_t *cs, char *params ) {
@@ -2229,6 +2543,10 @@ qboolean AICast_ScriptAction_GivePerk( cast_state_t *cs, char *params ) {
 
 	int clientNum;
 	clientNum = level.sortedClients[0];
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: giveperk requires pickupname\n");
+	}
 
 	for ( i = 1; bg_itemlist[i].classname; i++ ) {
 		if ( !Q_strcasecmp( params, bg_itemlist[i].classname ) ) {
@@ -2269,6 +2587,10 @@ AICast_ScriptAction_Movetype
 =================
 */
 qboolean AICast_ScriptAction_Movetype( cast_state_t *cs, char *params ) {
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: movetype requires params\n");
+	}
+
 	if ( !Q_strcasecmp( params, "walk" ) ) {
 		cs->movestate = MS_WALK;
 		cs->movestateType = MSTYPE_PERMANENT;
@@ -2530,10 +2852,21 @@ qboolean AICast_ScriptAction_GodMode( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
+/*
+=================
+AICast_ScriptAction_DropWeapon
+
+  syntax: drop_weapon <ainame>
+=================
+*/
 qboolean AICast_ScriptAction_DropWeapon(cast_state_t* cs, char* params) {
 	gentity_t* ent;
 	int weapon;
 	weapon = WP_NONE;
+
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: drop_weapon requires a ainame\n");
+	}
 
 	// find the cast/player with the given "name"
 	ent = AICast_FindEntityForName(params);
@@ -3688,6 +4021,10 @@ AICast_ScriptAction_SavePersistant
 ====================
 */
 qboolean AICast_ScriptAction_SavePersistant( cast_state_t *cs, char *params ) {
+	if (!params || !params[0]) {
+		G_Error("AI Scripting: savepersistant requires next_mapname\n");
+	}
+
 	G_SavePersistant( params );
 	return qtrue;
 }
@@ -3719,6 +4056,8 @@ extern void G_EndGame( void );
 /*
 ==============
 AICast_ScriptAction_EndGame
+
+ syntax: endgame
 ==============
 */
 qboolean AICast_ScriptAction_EndGame( cast_state_t *cs, char *params ) {
@@ -4033,14 +4372,28 @@ qboolean AICast_ScriptAction_DenyAction( cast_state_t *cs, char *params ) {
 /*
 =================
 AICast_ScriptAction_LightningDamage
+
+    syntax: lightningdamage <ON/OFF>
+
+  Note: this will change AIFL_ROLL_ANIM flag
 =================
 */
 qboolean AICast_ScriptAction_LightningDamage( cast_state_t *cs, char *params ) {
-	Q_strlwr( params );
-	if ( !Q_stricmp( params, "on" ) ) {
+	char    *pString, *token;
+
+	pString = params;
+	token = COM_ParseExt( &pString, qfalse );
+	if ( !token[0] ) {
+		G_Error( "AI_Scripting: syntax: lightningdamage <ON/OFF>" );
+	}
+	Q_strlwr( token );
+
+	if ( !Q_stricmp( token, "on" ) ) {
 		cs->aiFlags |= AIFL_ROLL_ANIM;  // hijacking this since the player doesn't use it
-	} else {
+	} else if ( !Q_stricmp( token, "off" ) ) {
 		cs->aiFlags &= ~AIFL_ROLL_ANIM;
+	} else {
+		G_Error( "AI_Scripting: syntax: lightningdamage <ON/OFF>" );
 	}
 	return qtrue;
 }
@@ -4048,6 +4401,8 @@ qboolean AICast_ScriptAction_LightningDamage( cast_state_t *cs, char *params ) {
 /*
 =================
 AICast_ScriptAction_Headlook
+
+  syntax: headlook <on/off>
 =================
 */
 qboolean AICast_ScriptAction_Headlook( cast_state_t *cs, char *params ) {
@@ -4111,10 +4466,15 @@ qboolean AICast_ScriptAction_RestoreScript( cast_state_t *cs, char *params ) {
 =================
 AICast_ScriptAction_StateType
 
+    syntax: statetype <alert/relaxed>
+
   set the current state for this character
 =================
 */
 qboolean AICast_ScriptAction_StateType( cast_state_t *cs, char *params ) {
+	if (!params || !params[0]) {
+		G_Error("AI_Scripting: syntax: statetype <alert/relaxed>\n");
+	}
 
 	if ( !Q_stricmp( params, "alert" ) ) {
 		cs->aiState = AISTATE_ALERT;
@@ -4129,7 +4489,7 @@ qboolean AICast_ScriptAction_StateType( cast_state_t *cs, char *params ) {
 ================
 AICast_ScriptAction_KnockBack
 
-  syntax: knockback [ON/OFF]
+  syntax: knockback <ON/OFF>
 ================
 */
 qboolean AICast_ScriptAction_KnockBack( cast_state_t *cs, char *params ) {
@@ -4159,7 +4519,7 @@ qboolean AICast_ScriptAction_KnockBack( cast_state_t *cs, char *params ) {
 ================
 AICast_ScriptAction_Zoom
 
-  syntax: zoom [ON/OFF]
+  syntax: zoom <ON/OFF>
 ================
 */
 qboolean AICast_ScriptAction_Zoom( cast_state_t *cs, char *params ) {
@@ -4234,6 +4594,13 @@ qboolean AICast_ScriptAction_StopCam( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
+/*
+=================
+AICast_ScriptAction_Cigarette
+
+  syntax: cigarette <ON/OFF>
+=================
+*/
 qboolean AICast_ScriptAction_Cigarette( cast_state_t *cs, char *params ) {
 	char    *pString, *token;
 
@@ -4260,7 +4627,7 @@ qboolean AICast_ScriptAction_Cigarette( cast_state_t *cs, char *params ) {
 =================
 AICast_ScriptAction_Parachute
 
-  syntax: parachute [ON/OFF]
+  syntax: parachute <ON/OFF>
 =================
 */
 qboolean AICast_ScriptAction_Parachute( cast_state_t *cs, char *params ) {
@@ -4313,6 +4680,8 @@ qboolean AICast_ScriptAction_AIScriptName( cast_state_t *cs, char *params ) {
 /*
 =================
 AICast_ScriptAction_SetHealth
+
+  syntax: sethealth <value>
 =================
 */
 qboolean AICast_ScriptAction_SetHealth( cast_state_t *cs, char *params ) {
@@ -4330,7 +4699,7 @@ qboolean AICast_ScriptAction_SetHealth( cast_state_t *cs, char *params ) {
 =================
 AICast_ScriptAction_NoTarget
 
-  syntax: notarget ON/OFF
+  syntax: notarget <ON/OFF>
 =================
 */
 qboolean AICast_ScriptAction_NoTarget( cast_state_t *cs, char *params ) {
@@ -4352,6 +4721,8 @@ qboolean AICast_ScriptAction_NoTarget( cast_state_t *cs, char *params ) {
 /*
 ==================
 AICast_ScriptAction_Cvar
+
+  syntax: cvar <cvarName> <cvarValue>
 ==================
 */
 qboolean AICast_ScriptAction_Cvar( cast_state_t *cs, char *params ) {
@@ -4382,6 +4753,17 @@ qboolean AICast_ScriptAction_Cvar( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
+
+qboolean AICast_ScriptAction_CinPlay( cast_state_t *cs, char *params ) {
+    trap_SendServerCommand( cs->entityNum, va( "cin_play %s", params ) );
+    return qtrue;
+}
+
+qboolean AICast_ScriptAction_CinStop( cast_state_t *cs, char *params ) {
+    trap_SendServerCommand( cs->entityNum, "cin_stop" );
+    return qtrue;
+}
+
 /*
 ==================
 AICast_ScriptAction_decoy
@@ -4398,6 +4780,7 @@ qboolean AICast_ScriptAction_decoy( cast_state_t *cs, char *params ) {
 ==================
 AICast_ScriptAction_MusicStart
 
+  syntax: mu_start <musicfile> <fadeuptime>
 ==================
 */
 qboolean AICast_ScriptAction_MusicStart( cast_state_t *cs, char *params ) {
@@ -4426,6 +4809,7 @@ qboolean AICast_ScriptAction_MusicStart( cast_state_t *cs, char *params ) {
 ==================
 AICast_ScriptAction_MusicPlay
 
+  syntax: mu_play <musicfile> [fadeup time]
 ==================
 */
 qboolean AICast_ScriptAction_MusicPlay( cast_state_t *cs, char *params ) {
@@ -4449,6 +4833,8 @@ qboolean AICast_ScriptAction_MusicPlay( cast_state_t *cs, char *params ) {
 /*
 ==================
 AICast_ScriptAction_MusicStop
+
+  syntax: mu_stop [fadeout time]
 ==================
 */
 qboolean AICast_ScriptAction_MusicStop( cast_state_t *cs, char *params ) {
@@ -4470,6 +4856,8 @@ qboolean AICast_ScriptAction_MusicStop( cast_state_t *cs, char *params ) {
 /*
 ==================
 AICast_ScriptAction_MusicFade
+
+  syntax: mu_fade <targetvol> <fadetime>
 ==================
 */
 qboolean AICast_ScriptAction_MusicFade( cast_state_t *cs, char *params ) {
@@ -4499,6 +4887,8 @@ qboolean AICast_ScriptAction_MusicFade( cast_state_t *cs, char *params ) {
 /*
 ==================
 AICast_ScriptAction_MusicQueue
+
+  syntax: mu_queue <musicfile> [musicfile2] ...
 ==================
 */
 qboolean AICast_ScriptAction_MusicQueue( cast_state_t *cs, char *params ) {
@@ -4689,6 +5079,8 @@ qboolean AICast_ScriptAction_PushAway( cast_state_t *cs, char *params ) {
 /*
 ==================
 AICast_ScriptAction_CatchFire
+
+  syntax: catchfire
 ==================
 */
 qboolean AICast_ScriptAction_CatchFire( cast_state_t *cs, char *params ) {

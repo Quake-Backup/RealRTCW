@@ -528,9 +528,9 @@ static void CG_DrawPlayerAmmoValue( rectDef_t *rect, int font, float scale, vec4
 
 	switch ( weap ) {      // some weapons don't draw ammo count text
 	case WP_AIRSTRIKE:
-	case WP_POISONGAS_MEDIC:
+	case WP_POISONGAS:
 	case WP_DYNAMITE_ENG:
-	case WP_SMOKE_BOMB_CVOPS:
+	case WP_SMOKE_BOMB:
 		return;
 
 	case WP_AKIMBO:
@@ -546,9 +546,7 @@ static void CG_DrawPlayerAmmoValue( rectDef_t *rect, int font, float scale, vec4
 	case WP_DYNAMITE:
 	case WP_TESLA:
 	case WP_FLAMETHROWER:
-	case WP_POISONGAS:
 	case WP_HOLYCROSS:
-	case WP_SMOKE_BOMB:
 		if ( type == 0 ) {  // don't draw reserve value, just clip (since these weapons have all their ammo in the clip)
 			return;
 		}

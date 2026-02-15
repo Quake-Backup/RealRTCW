@@ -2256,8 +2256,6 @@ static void PM_BeginWeaponReload( int weapon ) {
 	case WP_DYNAMITE_ENG:
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
-	case WP_SMOKE_BOMB:
-	case WP_SMOKE_BOMB_CVOPS:
 		break;
 
 	default:
@@ -2376,10 +2374,8 @@ void PM_BeginWeaponChange( int oldweapon, int newweapon, qboolean reload ) { //-
 
 	if ( oldweapon == WP_GRENADE_LAUNCHER ||
 		 oldweapon == WP_GRENADE_PINEAPPLE ||
-		 oldweapon == WP_SMOKE_BOMB ||
 		 oldweapon == WP_DYNAMITE ||
-		 oldweapon == WP_PANZERFAUST ||
-		 oldweapon == WP_POISONGAS ) {
+		 oldweapon == WP_PANZERFAUST ) {
 		if ( !pm->ps->ammoclip[oldweapon] ) {  // you're empty, don't show grenade '0'
 			showdrop = qfalse;
 		}
@@ -2397,8 +2393,6 @@ void PM_BeginWeaponChange( int oldweapon, int newweapon, qboolean reload ) { //-
 	case WP_DYNAMITE_ENG:
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
-	case WP_SMOKE_BOMB:
-	case WP_POISONGAS:
 	case WP_KNIFE:
 		pm->ps->grenadeTimeLeft = 0;        // initialize the timer on the potato you're switching to
 
@@ -2801,8 +2795,6 @@ static void PM_SwitchIfEmpty( void ) {
 	case WP_GRENADE_PINEAPPLE:
 	case WP_DYNAMITE:
 	case WP_PANZERFAUST:
-	case WP_SMOKE_BOMB:
-	case WP_POISONGAS:
 	case WP_KNIFE:
 		break;
 	default:
@@ -2825,8 +2817,6 @@ static void PM_SwitchIfEmpty( void ) {
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
 	case WP_DYNAMITE:
-	case WP_SMOKE_BOMB:
-	case WP_POISONGAS:
 	case WP_KNIFE:
 		// take the 'weapon' away from the player
 		COM_BitClear( pm->ps->weapons, pm->ps->weapon );
@@ -3124,12 +3114,10 @@ static qboolean PM_CheckGrenade() {
 		if (pm->ps->weapon != WP_GRENADE_LAUNCHER &&
 		pm->ps->weapon != WP_GRENADE_PINEAPPLE &&
 		pm->ps->weapon != WP_SMOKE_BOMB &&
-		pm->ps->weapon != WP_SMOKE_BOMB_CVOPS &&
 		pm->ps->weapon != WP_DYNAMITE &&
 		pm->ps->weapon != WP_POISONGAS &&
 		pm->ps->weapon != WP_AIRSTRIKE &&
 		pm->ps->weapon != WP_KNIFE &&
-		pm->ps->weapon != WP_POISONGAS_MEDIC &&
 	    pm->ps->weapon != WP_DYNAMITE_ENG ) {
 			return qfalse;
 		}
@@ -3575,7 +3563,7 @@ static void PM_Weapon( void ) {
 			}
 		}
 
-	if ( pm->ps->weapon == WP_POISONGAS_MEDIC ) {
+	if ( pm->ps->weapon == WP_POISONGAS ) {
 			if ( pm->cmd.serverTime - pm->ps->classWeaponTime < ( pm->medicChargeTime ) ) {
 				return;
 			}
@@ -3587,14 +3575,14 @@ static void PM_Weapon( void ) {
 			}
 		}
 
-	if ( pm->ps->weapon == WP_SMOKE_BOMB_CVOPS ) {
+	if ( pm->ps->weapon == WP_SMOKE_BOMB ) {
 			if ( pm->cmd.serverTime - pm->ps->classWeaponTime < ( pm->cvopsChargeTime ) ) {
 				return;
 			}
 		}
 	// check for fire
 	if ( (!(pm->cmd.buttons & BUTTON_ATTACK) && !PM_AltFire() && !delayedFire) 
-	    || (pm->ps->leanf != 0 && !PM_AltFiring(delayedFire) && pm->ps->weapon != WP_GRENADE_LAUNCHER && pm->ps->weapon != WP_GRENADE_PINEAPPLE && pm->ps->weapon != WP_SMOKE_BOMB && pm->ps->weapon != WP_POISONGAS) )
+	    || (pm->ps->leanf != 0 && !PM_AltFiring(delayedFire) && pm->ps->weapon != WP_GRENADE_LAUNCHER && pm->ps->weapon != WP_GRENADE_PINEAPPLE ) )
 	{
 		pm->ps->weaponTime  = 0;
 		pm->ps->weaponDelay = 0;
@@ -3639,9 +3627,7 @@ static void PM_Weapon( void ) {
 			 pm->ps->weapon != WP_GRENADE_LAUNCHER &&
 			 pm->ps->weapon != WP_GRENADE_PINEAPPLE &&
 			 pm->ps->weapon != WP_SMOKE_BOMB &&
-			 pm->ps->weapon != WP_SMOKE_BOMB_CVOPS &&
-			 pm->ps->weapon != WP_POISONGAS &&
-			 pm->ps->weapon != WP_POISONGAS_MEDIC ) {
+			 pm->ps->weapon != WP_POISONGAS ) {
 			PM_AddEvent( EV_NOFIRE_UNDERWATER );        // event for underwater 'click' for nofire
 			pm->ps->weaponTime  = 500;
 			return;
@@ -3675,7 +3661,8 @@ static void PM_Weapon( void ) {
 	case WP_M97:
 	case WP_AUTO5:
 	case WP_AIRSTRIKE:
-	case WP_POISONGAS_MEDIC:
+	case WP_POISONGAS:
+	case WP_SMOKE_BOMB:
 		if ( !weaponstateFiring ) {
 			if ( pm->ps->aiChar && pm->ps->weapon == WP_VENOM ) {
 				// AI get fast spin-up
@@ -3738,9 +3725,6 @@ static void PM_Weapon( void ) {
 	case WP_DYNAMITE_ENG:
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
-	case WP_SMOKE_BOMB:
-	case WP_SMOKE_BOMB_CVOPS:
-case WP_POISONGAS:
 	if ( !delayedFire ) {
 		if ( pm->ps->aiChar ) {
 			// ai characters go into their regular animation setup
@@ -3819,7 +3803,6 @@ case WP_POISONGAS:
 			case WP_GRENADE_PINEAPPLE:
 			case WP_POISONGAS:
 			case WP_SMOKE_BOMB:
-			case WP_SMOKE_BOMB_CVOPS:
 				playswitchsound = qfalse;
 				break;
 			// some weapons not allowed to reload.  must switch back to primary first
@@ -3935,8 +3918,7 @@ case WP_POISONGAS:
 	case WP_THOMPSON:
 	case WP_STEN:
 	case WP_AIRSTRIKE:
-	case WP_POISONGAS_MEDIC:
-	case WP_SMOKE_BOMB_CVOPS:
+	case WP_POISONGAS:
 		PM_ContinueWeaponAnim( weapattackanim );
 		break;
 
@@ -3954,7 +3936,7 @@ case WP_POISONGAS:
 		break;
 	}
 
-		if ( pm->ps->weapon == WP_AIRSTRIKE || pm->ps->weapon == WP_POISONGAS_MEDIC || pm->ps->weapon == WP_DYNAMITE_ENG ) { 
+		if ( pm->ps->weapon == WP_AIRSTRIKE || pm->ps->weapon == WP_POISONGAS || pm->ps->weapon == WP_DYNAMITE_ENG ) { 
 			PM_AddEvent( EV_NOAMMO );
 		}
 
@@ -4111,10 +4093,8 @@ case WP_POISONGAS:
 		case WP_GRENADE_LAUNCHER:
 		case WP_GRENADE_PINEAPPLE:
 		case WP_SMOKE_BOMB:
-		case WP_SMOKE_BOMB_CVOPS:
 		case WP_POISONGAS:
 		case WP_AIRSTRIKE:
-		case WP_POISONGAS_MEDIC:
 			pm->ps->weaponstate = WEAPON_DROPPING;
 			pm->ps->holdable[HI_KNIVES] = 0;
 			break;
@@ -4813,7 +4793,7 @@ void PmoveSingle( pmove_t *pmove ) {
 			}
 
 			// don't allow binocs if in the middle of throwing grenade
-			if ( ( pm->ps->weapon == WP_GRENADE_LAUNCHER || pm->ps->weapon == WP_GRENADE_PINEAPPLE || pm->ps->weapon == WP_SMOKE_BOMB || pm->ps->weapon == WP_SMOKE_BOMB_CVOPS || pm->ps->weapon == WP_DYNAMITE || pm->ps->weapon == WP_DYNAMITE_ENG || pm->ps->weapon == WP_POISONGAS ) && pm->ps->grenadeTimeLeft > 0 ) {
+			if ( ( pm->ps->weapon == WP_GRENADE_LAUNCHER || pm->ps->weapon == WP_GRENADE_PINEAPPLE || pm->ps->weapon == WP_SMOKE_BOMB || pm->ps->weapon == WP_DYNAMITE || pm->ps->weapon == WP_DYNAMITE_ENG || pm->ps->weapon == WP_POISONGAS ) && pm->ps->grenadeTimeLeft > 0 ) {
 				pm->ps->eFlags &= ~EF_ZOOMING;
 			}
 		}

@@ -543,7 +543,7 @@ trace_t *CheckMeleeAttack( gentity_t *ent, float dist, qboolean isTest ) {
 #define SMOKEBOMB_MINRADIUS   16.f
 #define SMOKEBOMB_MAXRADIUS   1024.f
 #define SMOKEBOMB_GROWTIME    1000
-#define SMOKEBOMB_SMOKETIME   25000
+#define SMOKEBOMB_SMOKETIME   15000
 #define SMOKEBOMB_POSTSMOKETIME 2000
 
 void weapon_smokeBombExplode( gentity_t *ent ) {
@@ -879,20 +879,10 @@ qboolean Bullet_Fire_Extended( gentity_t *source, gentity_t *attacker, vec3_t st
         return qfalse;
     }
 
-	// perform trace with base values (the trace doesn't care about the damage multiplier)
-	if (g_gametype.integer == GT_SURVIVAL)
-	{
-		vec3_t mins = {-3, -3, -3};
-		vec3_t maxs = {3, 3, 3};
-		trap_Trace(&tr, start, mins, maxs, end, source->s.number, MASK_SHOT);
-	}
-	else
-	{
+    // perform trace with base values (the trace doesn't care about the damage multiplier)
+    trap_Trace( &tr, start, NULL, NULL, end, source->s.number, MASK_SHOT );
 
-		trap_Trace(&tr, start, NULL, NULL, end, source->s.number, MASK_SHOT);
-	}
-
-	// DHM - Nerve :: only in single player
+    // DHM - Nerve :: only in single player
     AICast_ProcessBullet( attacker, start, tr.endpos );
     
     // bullet debugging using Q3A's railtrail
@@ -1142,10 +1132,8 @@ gentity_t *weapon_grenadelauncher_fire( gentity_t *ent, int grenType ) {
 		case WP_GRENADE_PINEAPPLE:
 		case WP_POISONGAS:
 		case WP_SMOKE_BOMB:
-		case WP_SMOKE_BOMB_CVOPS:
 		case WP_DYNAMITE:
 		case WP_AIRSTRIKE:
-		case WP_POISONGAS_MEDIC:
 		case WP_DYNAMITE_ENG:
 			upangle *= ammoTable[grenType].upAngle;
 			break;
@@ -1182,31 +1170,17 @@ gentity_t *weapon_grenadelauncher_fire( gentity_t *ent, int grenType ) {
 
 	if ( grenType == WP_POISONGAS ) 
 	{
-            m->s.effect1Time = 20;
-            m->think = G_PoisonGasExplode;
+            m->s.effect1Time = 30;
+            m->think = G_PoisonGas2Explode;
             m->poisonGasAlarm  = level.time + SMOKEBOMB_GROWTIME;
 			m->poisonGasRadius          = ammoTable[WP_POISONGAS].playerSplashRadius;
 			m->poisonGasDamage        =  ammoTable[WP_POISONGAS].playerDamage;	
 		    
 	}
 
-	if ( grenType == WP_POISONGAS_MEDIC ) 
-	{
-            m->s.effect1Time = 30;
-            m->think = G_PoisonGas2Explode;
-            m->poisonGasAlarm  = level.time + SMOKEBOMB_GROWTIME;
-			m->poisonGasRadius          = ammoTable[WP_POISONGAS_MEDIC].playerSplashRadius;
-			m->poisonGasDamage        =  ammoTable[WP_POISONGAS_MEDIC].playerDamage;	
-		    
-	}
-
 	// Arnout: override for smoke gren
-	if ( grenType == WP_SMOKE_BOMB ) {
-		m->s.effect1Time = 20;
-		m->think = weapon_smokeBombExplode;
-	}
 
-	if ( grenType ==  WP_SMOKE_BOMB_CVOPS ) {
+	if ( grenType ==  WP_SMOKE_BOMB ) {
 		m->s.effect1Time = 30;
 		m->think = weapon_smokeBombExplode;
 	}
@@ -1759,7 +1733,6 @@ void CalcMuzzlePoint( gentity_t *ent, int weapon, vec3_t forward, vec3_t right, 
 	case WP_GRENADE_LAUNCHER:
 	case WP_POISONGAS:
 	case WP_SMOKE_BOMB:
-	case WP_SMOKE_BOMB_CVOPS:
 		VectorMA( muzzlePoint, 20, right, muzzlePoint );
 		break;
 	case WP_AKIMBO:     // left side rather than right
@@ -1967,22 +1940,22 @@ void FireWeapon( gentity_t *ent ) {
 			weapon_grenadelauncher_fire( ent,WP_AIRSTRIKE );
 		}
 		break;
-	case WP_SMOKE_BOMB_CVOPS:
+	case WP_SMOKE_BOMB:
 		if ( level.time - ent->client->ps.classWeaponTime >= g_cvopsChargeTime.integer ) {
 			if ( level.time - ent->client->ps.classWeaponTime > g_cvopsChargeTime.integer ) {
 				ent->client->ps.classWeaponTime = level.time - g_cvopsChargeTime.integer;
 			}
 			ent->client->ps.classWeaponTime = level.time; //+= g_LTChargeTime.integer*0.5f; FIXME later
-			weapon_grenadelauncher_fire( ent,WP_SMOKE_BOMB_CVOPS );
+			weapon_grenadelauncher_fire( ent,WP_SMOKE_BOMB );
 		}
 		break;
-	case WP_POISONGAS_MEDIC:
+	case WP_POISONGAS:
 		if ( level.time - ent->client->ps.classWeaponTime >= g_medicChargeTime.integer ) {
 			if ( level.time - ent->client->ps.classWeaponTime > g_medicChargeTime.integer ) {
 				ent->client->ps.classWeaponTime = level.time - g_medicChargeTime.integer;
 			}
 			ent->client->ps.classWeaponTime = level.time; //+= g_LTChargeTime.integer*0.5f; FIXME later
-			weapon_grenadelauncher_fire( ent,WP_POISONGAS_MEDIC );
+			weapon_grenadelauncher_fire( ent,WP_POISONGAS );
 		}
 		break;
 	case WP_DYNAMITE_ENG:
@@ -2123,8 +2096,6 @@ void FireWeapon( gentity_t *ent ) {
 	case WP_GRENADE_LAUNCHER:
 	case WP_GRENADE_PINEAPPLE:
 	case WP_DYNAMITE:
-	case WP_POISONGAS:
-	case WP_SMOKE_BOMB:
 		weapon_grenadelauncher_fire( ent, ent->s.weapon );
 		break;
 	case WP_FLAMETHROWER:
