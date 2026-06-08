@@ -148,6 +148,12 @@ static void CG_UseItem( centity_t *cent ) {
 				case HI_CROSS:
 					CG_CenterPrint( "usedcross", SCREEN_HEIGHT - ( SCREEN_HEIGHT * 0.25 ), SMALLCHAR_WIDTH );
 					break;
+				case HI_EMP:
+					CG_CenterPrint( "usedemp", SCREEN_HEIGHT - ( SCREEN_HEIGHT * 0.25 ), SMALLCHAR_WIDTH );
+					break;
+				case HI_XSHIELD:
+					CG_CenterPrint( "usedshield", SCREEN_HEIGHT - ( SCREEN_HEIGHT * 0.25 ), SMALLCHAR_WIDTH );
+					break;
 				case HI_WINE:
 					CG_CenterPrint( "drankwine", SCREEN_HEIGHT - ( SCREEN_HEIGHT * 0.25 ), SMALLCHAR_WIDTH );
 					break;
@@ -187,6 +193,12 @@ static void CG_UseItem( centity_t *cent ) {
 		break;
 	case HI_CROSS:
 		trap_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.crossSound );
+		break;
+	case HI_EMP:
+		trap_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.empSound );
+		break;
+	case HI_XSHIELD:
+		trap_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.shieldSound );
 		break;
 	}
 }
@@ -1932,18 +1944,19 @@ case EV_FILL_CLIP_FULL:
 		break;
 	case EV_FIRE_WEAPON:
 	case EV_FIRE_WEAPONB:
-		DEBUGNAME( "EV_FIRE_WEAPON" );
+		DEBUGNAME("EV_FIRE_WEAPON");
 
-		if ( cg.snap->ps.eFlags & EF_ZOOMING ) { // to stop airstrike sfx
-			break;
+		// Only suppress weapon-fire events for the local player while zooming
+		if (cent->currentState.number == cg.snap->ps.clientNum)
+		{
+			if (cg.snap->ps.eFlags & EF_ZOOMING)
+			{
+				break;
+			}
 		}
 
-		CG_FireWeapon( cent, event );
-		if ( event == EV_FIRE_WEAPONB ) {  // akimbo firing colt
-			cent->akimboFire = qtrue;
-		} else {
-			cent->akimboFire = qfalse;
-		}
+		CG_FireWeapon(cent, event);
+		cent->akimboFire = (event == EV_FIRE_WEAPONB);
 		break;
 	case EV_FIRE_WEAPON_LASTSHOT:
 		DEBUGNAME( "EV_FIRE_WEAPON_LASTSHOT" );
@@ -2028,6 +2041,10 @@ case EV_FILL_CLIP_FULL:
 		break;
 	case EV_USE_ITEM16:
 		DEBUGNAME( "EV_USE_ITEM16" );
+		CG_UseItem( cent );
+		break;
+	case EV_USE_ITEM17:
+		DEBUGNAME( "EV_USE_ITEM17" );
 		CG_UseItem( cent );
 		break;
 
@@ -2373,6 +2390,13 @@ case EV_FILL_CLIP_FULL:
 		}
 		trap_S_StartSound( NULL, es->number, CHAN_ITEM, trap_S_RegisterSound( "sound/items/protect3.wav" ) );
 		break;
+	case EV_POWERUP_XSHIELD:
+		DEBUGNAME( "EV_POWERUP_XSHIELD" );
+		if ( es->number == cg.snap->ps.clientNum ) {
+			cg.powerupActive = PW_XSHIELD;
+			cg.powerupTime = cg.time;
+		}
+		break;
 	case EV_POWERUP_REGEN:
 		DEBUGNAME( "EV_POWERUP_REGEN" );
 		if ( es->number == cg.snap->ps.clientNum ) {
@@ -2702,6 +2726,9 @@ case EV_FILL_CLIP_FULL:
 
 	case EV_SPAWN_SPIRIT:
 		CG_SpawnSpirit( cent );
+		break;
+	case EV_EMP_WAVE:
+		CG_SpawnEMPWave(cent);
 		break;
 
 	default:

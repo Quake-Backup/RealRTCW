@@ -172,7 +172,7 @@ typedef struct {
 	// ffmpeg
 	AVFormatContext *formatCtx;
 	AVPacket *packet;
-	AVCodec *vCodec;
+	const AVCodec *vCodec;
 	AVCodecContext *vCodecCtx;
 	AVFrame *vFrame, *vRgbaFrame;
 	SwsContext *swsCtx;
@@ -184,7 +184,7 @@ typedef struct {
 	int videoStream;
 	int audioStream;
 
-	AVCodec *aCodec;
+    const AVCodec *aCodec;
 	AVCodecContext *aCodecCtx;
 	AVFrame *aFrame;
 	SwrContext *swrCtx;
@@ -212,7 +212,11 @@ static int FFMPEG_Read( void *opaque, byte *buf, int bufSize ) {
 
 static long long FFMPEG_Seek( void *opaque, long long offset, int whence ) {
     if ( whence == AVSEEK_SIZE ) {
-        return FS_filelength( cinTable[currentHandle].iFile );
+		if ( FS_isFileHandleInPak(cinTable[currentHandle].iFile) ) {
+			return FS_filelengthInPak(cinTable[currentHandle].iFile);
+		} else {
+			return FS_filelength(cinTable[currentHandle].iFile);
+		}
 	}
 
     if ( FS_Seek( cinTable[currentHandle].iFile, offset, whence ) < 0 ) {
@@ -1401,37 +1405,30 @@ redump:
 }
 
 static int FFMPEG_ReadFrame( qboolean onlyAudio ) {
-	int ret;
-    ret = av_read_frame(
-        cinTable[currentHandle].formatCtx,
-        cinTable[currentHandle].packet
-    );
+    int ret = av_read_frame( cinTable[currentHandle].formatCtx,
+                             cinTable[currentHandle].packet );
 
     if ( ret < 0 ) {
-        // eof
-		avcodec_send_packet(cinTable[currentHandle].vCodecCtx, NULL);
-		if (cinTable[currentHandle].aCodecCtx)
-		{
-			avcodec_send_packet(cinTable[currentHandle].aCodecCtx, NULL);
-		}
-		cinTable[currentHandle].eof = qtrue;
-	 	cinTable[currentHandle].status = FMV_EOF;
-    } else if ( cinTable[currentHandle].packet->stream_index ==
-         cinTable[currentHandle].videoStream && !onlyAudio ) {
+        avcodec_send_packet( cinTable[currentHandle].vCodecCtx, NULL );
+        if ( cinTable[currentHandle].aCodecCtx ) {
+            avcodec_send_packet( cinTable[currentHandle].aCodecCtx, NULL );
+        }
+        cinTable[currentHandle].eof = qtrue;
+        cinTable[currentHandle].status = FMV_EOF;
+        return ret;
+    }
 
-        avcodec_send_packet( 
-            cinTable[currentHandle].vCodecCtx, 
-            cinTable[currentHandle].packet 
-        );
-	}
-	else if (cinTable[currentHandle].aCodecCtx &&
-			 cinTable[currentHandle].packet->stream_index == cinTable[currentHandle].audioStream &&
-			 !cinTable[currentHandle].silent)
-	{
-		avcodec_send_packet(cinTable[currentHandle].aCodecCtx, cinTable[currentHandle].packet);
-	}
+    if ( cinTable[currentHandle].packet->stream_index == cinTable[currentHandle].videoStream && !onlyAudio ) {
+        avcodec_send_packet( cinTable[currentHandle].vCodecCtx, cinTable[currentHandle].packet );
+    } else if ( cinTable[currentHandle].aCodecCtx &&
+                cinTable[currentHandle].packet->stream_index == cinTable[currentHandle].audioStream &&
+                !cinTable[currentHandle].silent ) {
+        avcodec_send_packet( cinTable[currentHandle].aCodecCtx, cinTable[currentHandle].packet );
+    }
 
-	return ret;
+    // IMPORTANT: release packet refs every time
+    av_packet_unref( cinTable[currentHandle].packet );
+    return ret;
 }
 
 static void FFMPEG_PredecodeAudio( void ) {
@@ -1581,7 +1578,6 @@ static int FFMPEG_DecodeVideo( ) {
 *
 ******************************************************************************/
 static void FFMPEG_Interrupt( void ) {
-	int t0;
 	static int dbg_frame = 0;
 	dbg_frame++;
 
@@ -1623,8 +1619,6 @@ static void FFMPEG_Interrupt( void ) {
 			1.0f,
 			-1);
 	}
-
-	t0 = Sys_Milliseconds( );
 
 	// read frame
 	FFMPEG_ReadFrame( qfalse );
@@ -1688,9 +1682,17 @@ static int FFMPEG_Init( void ) {
 
 	cinTable[currentHandle].startTime = cinTable[currentHandle].lastTime = CL_ScaledMilliseconds();
 
+	if ( !cinTable[currentHandle].iFile ) {
+		Com_DPrintf( "FFMPEG_Init: no file handle for '%s'\n", cinTable[currentHandle].fileName );
+		return -1;
+	}
+
 	cinTable[currentHandle].avioBuf = av_malloc( 65536 );
 
-	FS_Seek( cinTable[currentHandle].iFile, 0, FS_SEEK_SET );
+	if ( FS_Seek( cinTable[currentHandle].iFile, 0, FS_SEEK_SET ) < 0 ) {
+		Com_DPrintf( "FFMPEG_Init: seek failed for '%s'\n", cinTable[currentHandle].fileName );
+		return -1;
+	}
 
 	cinTable[currentHandle].avioCtx = avio_alloc_context( 
 		cinTable[currentHandle].avioBuf, 
@@ -2268,7 +2270,13 @@ int CIN_PlayCinematic( const char *arg, int x, int y, int w, int h, int systemBi
 			return -1;
 		}
 	} else {
-		FS_FOpenFileRead( cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue );
+		cinTable[currentHandle].ROQSize = FS_FOpenFileRead( cinTable[currentHandle].fileName, &cinTable[currentHandle].iFile, qtrue );
+		if ( cinTable[currentHandle].ROQSize <= 0 || !cinTable[currentHandle].iFile ) {
+			Com_DPrintf( "play(%s), file not found or unreadable\n", arg );
+			cinTable[currentHandle].fileName[0] = 0;
+			cinTable[currentHandle].iFile = 0;
+			return -1;
+		}
 	}
 
 	CIN_SetExtents( currentHandle, x, y, w, h );

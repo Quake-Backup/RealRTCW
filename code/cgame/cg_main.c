@@ -83,6 +83,9 @@ Q_EXPORT intptr_t vmMain( intptr_t command, intptr_t arg0, intptr_t arg1, intptr
 		cgDC.cursory = cgs.cursorY;
 		CG_MouseEvent( arg0, arg1 );
 		return 0;
+	case CG_JOYSTICK_EVENT:
+		CG_JoystickEvent(arg0, arg1);
+		break;
 	default:
 		CG_Error( "vmMain: unknown command %li", (long)command );
 		break;
@@ -1018,7 +1021,7 @@ static void CG_LoadTranslationTextStrings(const char *file) {
 	int len, i;
 	char *token;
 
-	Com_sprintf(filename, MAX_QPATH, file);
+	Q_strncpyz(filename, file, sizeof(filename));
 	len = trap_FS_FOpenFile(filename, &f, FS_READ);
 	if (len <= 0) {
 		CG_Printf(S_COLOR_RED "WARNING: string translation file (main/%s)\n", filename);
@@ -1337,6 +1340,8 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.crossZapScript = CG_SoundScriptPrecache( "crossZap" );
 	cgs.media.teslaLoopSound = trap_S_RegisterSound( "sound/weapons/tesla/loop.wav" );
 
+	cgs.media.xshieldLoopSound = trap_S_RegisterSound( "sound/pickup/holdable/shield_loop.wav" );
+
 	cgs.media.batsFlyingLoopSound = trap_S_RegisterSound( "sound/world/bats_flying.wav" );
 
 	cgs.media.elecSound = trap_S_RegisterSound( "sound/items/use_elec.wav" );
@@ -1347,6 +1352,8 @@ static void CG_RegisterSounds( void ) {
 	cgs.media.adrenalineSound = trap_S_RegisterSound( "sound/pickup/holdable/use_adrenaline.wav" ); 
 	cgs.media.bandagesSound = trap_S_RegisterSound( "sound/pickup/holdable/use_bandages.wav" ); 
 	cgs.media.crossSound = trap_S_RegisterSound( "sound/pickup/holdable/use_cross.wav" ); 
+	cgs.media.empSound = trap_S_RegisterSound( "sound/pickup/holdable/use_emp.wav" ); 
+	cgs.media.shieldSound = trap_S_RegisterSound( "sound/pickup/holdable/use_shield.wav" ); 
 	cgs.media.quadSound = trap_S_RegisterSound( "sound/items/damage3.wav" );
 	cgs.media.sfx_ric1 = trap_S_RegisterSound( "sound/weapons/machinegun/ric1.wav" );
 	cgs.media.sfx_ric2 = trap_S_RegisterSound( "sound/weapons/machinegun/ric2.wav" );
@@ -1421,6 +1428,7 @@ static void CG_RegisterSounds( void ) {
 
 	trap_S_RegisterSound( "sound/Loogie/spit.wav" );
 	trap_S_RegisterSound( "sound/Loogie/sizzle.wav" );
+
 }
 
 
@@ -1557,6 +1565,9 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.hastePuffShader = trap_R_RegisterShader("hasteSmokePuff" );
 	cgs.media.redQuadShader = trap_R_RegisterShader("powerups/vampire" );
 
+	cgs.media.empRingShader = trap_R_RegisterShader("sprites/emp_ring1");
+	cgs.media.empSparkShader = trap_R_RegisterShader("sprites/emp_spark");
+
 	CG_LoadingString( " - models" );
 
 	cgs.media.machinegunBrassModel = trap_R_RegisterModel( "models/weapons/shells/m_shell.md3" );
@@ -1663,6 +1674,13 @@ static void CG_RegisterGraphics( void ) {
 	cgs.media.shardCeramic1 = trap_R_RegisterModel( "models/shards/ceramic1.md3" );
 	cgs.media.shardCeramic2 = trap_R_RegisterModel( "models/shards/ceramic2.md3" );
 	// done
+
+	cgs.media.perkProIcons[PERK_RUNNER] = trap_R_RegisterShaderNoMip("icons/perk_runner_pro.tga");
+	cgs.media.perkProIcons[PERK_SCAVENGER] = trap_R_RegisterShaderNoMip("icons/perk_scavenger_pro.tga");
+	cgs.media.perkProIcons[PERK_RIFLING] = trap_R_RegisterShaderNoMip("icons/perk_rifling_pro.tga");
+	cgs.media.perkProIcons[PERK_RESILIENCE] = trap_R_RegisterShaderNoMip("icons/perk_regen_pro.tga");
+	cgs.media.perkProIcons[PERK_SECONDCHANCE] = trap_R_RegisterShaderNoMip("icons/perk_secondchance_pro.tga");
+	cgs.media.perkProIcons[PERK_WEAPONHANDLING] = trap_R_RegisterShaderNoMip("icons/perk_weaponhandling_pro.tga");
 
 	cgs.media.shardRubble1 = trap_R_RegisterModel( "models/mapobjects/debris/brick000.md3" );
 	cgs.media.shardRubble2 = trap_R_RegisterModel( "models/mapobjects/debris/brick001.md3" );

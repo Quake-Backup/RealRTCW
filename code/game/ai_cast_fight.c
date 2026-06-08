@@ -466,7 +466,7 @@ qboolean AICast_SameTeam( cast_state_t *cs, int enemynum ) {
 }
 
 static inline qboolean AI_IsZombie(int c) {
-    return (c == AICHAR_ZOMBIE || c == AICHAR_ZOMBIE_SURV || c == AICHAR_ZOMBIE_FLAME || c == AICHAR_ZOMBIE_GHOST);
+    return (c == AICHAR_ZOMBIE || c == AICHAR_ZOMBIE_SURV || c == AICHAR_ZOMBIE_FLAME || c == AICHAR_ZOMBIE_GHOST || c == AICHAR_FLESH);
 }
 
 #define BBOX_ALLOWANCE 50.0f
@@ -508,6 +508,7 @@ float AICast_WeaponRange(cast_state_t *cs, int weaponnum) {
 
 	case WP_M97:
 	case WP_AUTO5:
+	case WP_M30:
 	    return 475.0f;
     case WP_GRENADE_LAUNCHER:
     case WP_GRENADE_PINEAPPLE:
@@ -1144,6 +1145,7 @@ qboolean AICast_WeaponUsable( cast_state_t *cs, int weaponNum ) {
 		case AICHAR_ZOMBIE_SURV:
 		case AICHAR_ZOMBIE_GHOST:
 		case AICHAR_ZOMBIE_FLAME:
+		case AICHAR_FLESH:
 			return qtrue;   // always usable
 		default:
 			delay = -1;

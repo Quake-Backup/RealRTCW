@@ -273,6 +273,78 @@ void CrossBurn( gentity_t *owner, gentity_t *targ ) {
 	timer->nextthink = level.time + 1500;  // 1.5s (use 1000..2000)
 }
 
+void EMP_ClearFxThink(gentity_t *timer) {
+    gentity_t *targ;
+    if (!timer || !timer->inuse) return;
+
+    targ = timer->enemy;
+    if (targ && targ->inuse && targ->client) {
+
+        // Clear FX when the latest EMP FX really ended
+        if (targ->empFxUntil <= level.time) {
+            targ->client->ps.powerups[PW_QUAD] = 0;
+        }
+
+        // Wake-up anim when the latest EMP disable really ended
+        if (targ->empDisabledUntil <= level.time) {
+            if (targ->aiCharacter == AICHAR_PROTOSOLDIER || targ->aiCharacter == AICHAR_SUPERSOLDIER || targ->aiCharacter == AICHAR_SUPERSOLDIER_LAB) {
+                if (targ->empAnimState == 1 || targ->empAnimState == 2) {
+                    BG_PlayAnimName(&targ->client->ps, "come_alive", ANIM_BP_TORSO, qtrue, qfalse, qtrue);
+					targ->client->ps.legsTimer = 0;
+					targ->client->ps.torsoTimer = 7400;
+                    targ->empAnimState = 3;
+                }
+            }
+        }
+    }
+
+    G_FreeEntity(timer);
+}
+
+void EMP_Apply(gentity_t *owner, gentity_t *targ, int durationMs) {
+    gentity_t *timer;
+
+    if (!targ || !targ->inuse || !targ->client) return;
+    if (targ->health <= 0) return;
+
+    // Extend/refresh EMP
+	targ->empDisabledUntil = level.time + durationMs;
+	targ->empFxUntil = level.time + durationMs;
+	targ->client->ps.powerups[PW_QUAD] = level.time + durationMs;
+
+	// Start shutdown anim once per EMP "instance" (handles refresh)
+	if (targ->empAnimToken != targ->empDisabledUntil)
+	{
+		targ->empAnimToken = targ->empDisabledUntil;
+		targ->empAnimState = 0;
+	}
+
+	if (targ->aiCharacter == AICHAR_PROTOSOLDIER || targ->aiCharacter == AICHAR_SUPERSOLDIER || targ->aiCharacter == AICHAR_SUPERSOLDIER_LAB )
+	{
+		// only start the shutdown once
+		if (targ->empAnimState == 0)
+		{
+			BG_PlayAnimName(&targ->client->ps, "power_down", ANIM_BP_LEGS, qtrue, qfalse, qtrue);
+			BG_PlayAnimName(&targ->client->ps, "power_down", ANIM_BP_TORSO, qtrue, qfalse, qtrue);
+
+			// hold long enough so it completes (77 frames @ 15 fps ≈ 5.1s)
+			// timer is ms; set a bit longer than needed
+			targ->client->ps.legsTimer = 5200;
+			targ->client->ps.torsoTimer = 5200;
+
+			targ->empAnimState = 1;
+		}
+	}
+
+    // Timer to clear FX later (don’t touch targ->think)
+    timer = G_Spawn();
+    timer->classname = "emp_clearfx_timer";
+    timer->r.svFlags = SVF_NOCLIENT;
+    timer->enemy = targ;
+    timer->think = EMP_ClearFxThink;
+    timer->nextthink = level.time + durationMs;
+}
+
 /*
 ==============
 UseHoldableItem
@@ -421,6 +493,11 @@ void UseHoldableItem( gentity_t *ent, int item ) {
 
 		num = trap_EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
 
+		if ( !g_cheats.integer ) 
+		{
+		steamSetAchievement("ACH_ITEM_CROSS");
+		}
+
 		for (i = 0; i < num; i++)
 		{
 			targ = &g_entities[touch[i]];
@@ -448,6 +525,74 @@ void UseHoldableItem( gentity_t *ent, int item ) {
 			CrossBurn(ent, targ);
 		};
 		break;
+	case HI_EMP:
+	{
+		const float radius = 512.0f;
+		const int duration = 8500;
+		int touch[MAX_GENTITIES];
+		int num, i;
+		vec3_t mins, maxs, delta;
+		gentity_t *targ;
+
+		VectorSet(mins, ent->r.currentOrigin[0] - radius, ent->r.currentOrigin[1] - radius, ent->r.currentOrigin[2] - radius);
+		VectorSet(maxs, ent->r.currentOrigin[0] + radius, ent->r.currentOrigin[1] + radius, ent->r.currentOrigin[2] + radius);
+
+		num = trap_EntitiesInBox(mins, maxs, touch, MAX_GENTITIES);
+
+		G_AddEvent( ent, EV_EMP_WAVE, 0 );
+
+		if ( !g_cheats.integer ) 
+		{
+		steamSetAchievement("ACH_ITEM_EMP");
+		}
+		
+		for (i = 0; i < num; i++)
+		{
+			targ = &g_entities[touch[i]];
+
+			if (!targ->inuse || targ->health <= 0)
+				continue;
+			if (!targ->client)
+				continue;
+
+			// Only X-creatures
+			if (targ->aiCharacter != AICHAR_LOPER &&
+				targ->aiCharacter != AICHAR_PROTOSOLDIER &&
+			    targ->aiCharacter != AICHAR_XSHEPHERD &&
+			    targ->aiCharacter != AICHAR_SUPERSOLDIER &&
+			    targ->aiCharacter != AICHAR_SUPERSOLDIER_LAB)
+			{
+				continue;
+			}
+
+
+			VectorSubtract(targ->r.currentOrigin, ent->r.currentOrigin, delta);
+			if (VectorLength(delta) > radius)
+				continue;
+
+			EMP_Apply(ent, targ, duration);
+		}
+		break;
+	}
+	case HI_XSHIELD:
+	{
+		const int duration = 10000;
+
+		// already active? ignore (optional)
+		if (ent->client->ps.powerups[PW_XSHIELD] > level.time)
+		{
+			break;
+		}
+
+		if ( !g_cheats.integer ) 
+		{
+		steamSetAchievement("ACH_ITEM_XSHIELD");
+		}
+
+		ent->client->ps.powerups[PW_XSHIELD] = level.time + duration;
+
+		break;
+	}
 	case HI_BOOK1:
 	case HI_BOOK2:
 	case HI_BOOK3:
@@ -992,7 +1137,6 @@ void G_RemoveWeapon( gentity_t *ent, weapon_t weapon ) {
 void G_DropWeapon( gentity_t *ent, weapon_t weapon ) {
 	vec3_t    angles, velocity, org, offset, mins, maxs;
 	gclient_t *client = ent->client;
-	gentity_t *ent2;
 	gitem_t   *item;
 	trace_t   tr;
 
@@ -1030,7 +1174,7 @@ void G_DropWeapon( gentity_t *ent, weapon_t weapon ) {
 	trap_Trace( &tr, client->ps.origin, mins, maxs, org, ent->s.number, MASK_SOLID );
 	VectorCopy( tr.endpos, org );
 
-	ent2 = LaunchItem( item, org, velocity );
+	LaunchItem( item, org, velocity );
 
 	G_RemoveWeapon( ent, weapon );
 }
@@ -1764,7 +1908,34 @@ void FinishSpawningItem( gentity_t *ent ) {
 	}
        
     // No new ammo types too
-	if ( g_fullarsenal.integer == 0 && ent->item->giType == IT_AMMO && (ent->item->giAmmoIndex == WP_MP44 || ent->item->giAmmoIndex == WP_M97 || ent->item->giAmmoIndex == WP_BAR)) 
+	if ( g_fullarsenal.integer == 0 && ent->item->giType == IT_AMMO && (
+		ent->item->giAmmoIndex == WP_MP44 || 
+		ent->item->giAmmoIndex == WP_M97 || 
+		ent->item->giAmmoIndex == WP_BAR || 
+		ent->item->giAmmoIndex == WP_REVOLVER)) 
+	{
+	return;
+	} 
+
+    // Classic Tides of War arsenal
+	if ( g_fullarsenal.integer == 2 && (   ent->item->giWeapon == WP_MP34 
+	                                || ent->item->giWeapon == WP_REVOLVER 
+									|| ent->item->giWeapon == WP_G43 
+									|| ent->item->giWeapon == WP_M1GARAND 
+									|| ent->item->giWeapon == WP_BAR 
+									|| ent->item->giWeapon == WP_MG42M
+									|| ent->item->giWeapon == WP_MP44
+									|| ent->item->giWeapon == WP_M7
+									|| ent->item->giWeapon == WP_BROWNING ) )
+	{
+    return;
+	}
+
+    // No new ammo types too Classic Tides of War
+	if ( g_fullarsenal.integer == 2 && ent->item->giType == IT_AMMO && (
+		ent->item->giAmmoIndex == WP_MP44 || 
+		ent->item->giAmmoIndex == WP_BAR || 
+		ent->item->giAmmoIndex == WP_REVOLVER)) 
 	{
 	return;
 	} 

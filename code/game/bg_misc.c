@@ -1355,6 +1355,54 @@ ammoTable_t ammoTable[WP_NUM_WEAPONS] = {
 		0,
 		0,                                       
 	},
+
+	{   
+		WP_M30,
+		WEAPON_CLASS_SHOTGUN,
+		WP_NONE,
+		WEAPON_TEAM_AXIS,              
+		0,        
+		0,       
+		0,        
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,        
+		0,       
+		0,      
+		0,      
+		0,      
+		0,      
+		0,       
+		0,
+		0,          
+		0,          
+		0,          
+		0,       
+		0,                 
+		0.0f,            
+		0,             
+		{.0f, .0f},     
+		{.0f, .0f},         
+		0,               
+		0.0,               
+		0,               
+		0,
+		{0.0, 0.0},              
+		MOD_M30,   
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,                                     
+	},
    // Heavy Weapons
 	{   
 		WP_BROWNING,
@@ -2617,7 +2665,7 @@ int reloadableWeapons[] = {
 	WP_SILENCER, WP_TT33, WP_FG42, WP_REVOLVER, WP_MG42M, WP_COLT,
 	WP_LUGER, WP_MORTAR, WP_AKIMBO, WP_PPSH, WP_M7, WP_MP34,
 	WP_MAUSER, WP_SNIPERRIFLE, WP_SNOOPERSCOPE, WP_MOSIN, WP_M1GARAND, WP_G43,
-	WP_MP44, WP_BAR, WP_M97, WP_FG42SCOPE, WP_BROWNING, WP_VENOM,
+	WP_MP44, WP_BAR, WP_M97, WP_FG42SCOPE, WP_BROWNING, WP_VENOM, WP_M30,
 	WP_DELISLE, WP_DELISLESCOPE, WP_TESLA, WP_M1941, WP_AUTO5,
 	WP_M1941SCOPE, WP_DUAL_TT33, WP_HDM, -1};
 
@@ -4584,6 +4632,34 @@ model="models/weapons2/m97/m97_3rd.md3"
 	},
 
 
+	/*QUAKED weapon_auto5 (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/weapons2/m97/m97_3rd.md3"
+*/
+	{
+		"weapon_m30",
+		"sound/misc/w_pkup.wav",
+		{ 
+		"",
+		"",
+		""
+		},
+
+			"icons/iconw_m30",  
+			"m30",            
+			700,
+			IT_WEAPON,
+			WP_M30,
+			WP_M30,
+			WP_M97,
+			WP_M30,
+			WP_M30,
+			"",                      
+			"",                     
+			{ 0,0,0,0,0,0 }
+	},
+
+
 /*QUAKED weapon_hdm (.3 .3 1) (-16 -16 -16) (16 16 16) SUSPENDED SPIN - RESPAWN
 "stand" values:
 	no value:	laying in a default position on it's side (default)
@@ -6244,6 +6320,23 @@ used by: Monster Attack 1 (specific to each monster)
 	{50,50,50,50,50,50}
 },
 {
+	"m30_ammo",
+	"sound/misc/am_pkup.wav",
+	{ "models/powerups/ammo/default.md3", 0, 0 },
+	"icons/iconw_default",
+	"m30_ammo",
+	60,
+	IT_AMMO,
+	WP_NONE,
+	WP_M30,
+	WP_M30,
+	WP_M30,
+	WP_M30,
+	"",
+	"",
+	{50,50,50,50,50,50}
+},
+{
 	"browning_ammo",
 	"sound/misc/am_pkup.wav",
 	{ "models/powerups/ammo/default.md3", 0, 0 },
@@ -6565,6 +6658,72 @@ model="models/powerups/holdable/cross.md3"
 	},
 
 
+/*QUAKED holdable_emp(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_cross.wav"
+use sound : "sound/pickup/holdable/use_cross.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/emp.md3"
+*/
+	{
+		"holdable_emp",
+		"sound/pickup/holdable/get_adrenaline.wav",
+		{
+		"models/powerups/holdable/emp.md3",
+		0, 
+		0
+		},
+
+		"icons/emp",             
+		"EMP activated",             
+		1,
+		IT_HOLDABLE,
+		WP_NONE,
+		HI_EMP,
+		0,
+		0,
+		0,
+		"",                             
+		"sound/pickup/holdable/use_emp.wav",
+		{1,1,1,1,1,1}
+	},
+
+
+/*QUAKED holdable_xshield(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
+Protection from fatigue
+Using the "sprint" key will not fatigue the character
+
+pickup sound : "sound/pickup/holdable/get_cross.wav"
+use sound : "sound/pickup/holdable/use_cross.wav"
+-------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
+model="models/powerups/holdable/emp.md3"
+*/
+	{
+		"holdable_xshield",
+		"sound/pickup/holdable/get_adrenaline.wav",
+		{
+		"models/powerups/holdable/shieldgen.md3",
+		0, 
+		0
+		},
+
+		"icons/xshield",             
+		"X Shield activated",             
+		1,
+		IT_HOLDABLE,
+		WP_NONE,
+		HI_XSHIELD,
+		0,
+		0,
+		0,
+		"",                             
+		"sound/pickup/holdable/use_shield.wav",
+		{1,1,1,1,1,1}
+	},
+
+
 
 /*QUAKED holdable_book1(.3 .3 1) (-8 -8 -8) (8 8 8) SUSPENDED SPIN - RESPAWN
 -------- MODEL FOR RADIANT ONLY - DO NOT SET THIS AS A KEY --------
@@ -6825,7 +6984,6 @@ model="models/powerups/holdable/zemphr_book.md3"
 		{0,0,0,0,0,0}
 	},
 
-
 		/*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
 */
 		{
@@ -6850,7 +7008,29 @@ model="models/powerups/holdable/zemphr_book.md3"
 		{0,0,0,0,0,0}
 	},
 
-
+		/*QUAKED item_enviro (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
+*/
+		{
+		"item_xshield_dummy",
+		"sound/misc/powerup_shield.wav",
+		{
+		"models/powerups/survival/thule_g.md3",
+		0, 
+		0
+		},
+		"",                             
+		"Veil Shield",     
+		10,
+		IT_POWERUP,
+		WP_NONE,
+		PW_XSHIELD,
+		0,
+		0,
+		0,
+		"",                          
+		"sound/items/airout.wav sound/items/protect3.wav",   
+		{0,0,0,0,0,0}
+	},
 
 /*QUAKED item_invis (.3 .3 1) (-16 -16 -16) (16 16 16) suspended
 */
@@ -7337,30 +7517,14 @@ BG_AkimboFireSequence
 ==============
 */
 //qboolean BG_AkimboFireSequence( playerState_t *ps ) {
-qboolean BG_AkimboFireSequence( int weapon, int akimboClip, int coltClip ) {
+qboolean BG_AkimboFireSequence( int weapon, int akimboClip ) {
 	// NOTE: this doesn't work when clips are turned off (dmflags 64)
 
 	if ( weapon != WP_AKIMBO && weapon != WP_DUAL_TT33 ) {
 		return qfalse;
 	}
 
-	if ( !akimboClip ) {
-		return qfalse;
-	}
-
-	// no ammo in colt, must be akimbo turn
-	if ( !coltClip ) {
-		return qtrue;
-	}
-
-	// at this point, both have ammo
-
-	// now check 'cycle'   // (removed old method 11/5/2001)
-	if ( ( akimboClip + coltClip ) & 1 ) {
-		return qfalse;
-	}
-
-	return qtrue;
+	return akimboClip & 1;
 }
 
 //----(SA) end
@@ -7603,11 +7767,7 @@ qboolean BG_AddMagicAmmo(playerState_t *ps, int numOfClips) {
 				if (!numOfClips)
 					return qtrue;
 
-				int clipsToAdd = (weapon == WP_AKIMBO || weapon == WP_DUAL_TT33)
-					? numOfClips * 2
-					: numOfClips;
-
-				ps->ammo[ammoIndex] += clipsToAdd * maxclip;
+				ps->ammo[ammoIndex] += numOfClips * maxclip;
 
 				if (ps->ammo[ammoIndex] > maxammo) {
 					ps->ammo[ammoIndex] = maxammo;
@@ -8586,6 +8746,7 @@ char *eventnames[] = {
 	"EV_USE_ITEM14",
 	"EV_USE_ITEM15",
 	"EV_USE_ITEM16",
+	"EV_USE_ITEM17",
 	"EV_ITEM_RESPAWN",
 	"EV_ITEM_POP",
 	"EV_PLAYER_TELEPORT_IN",
@@ -8614,6 +8775,7 @@ char *eventnames[] = {
 	"EV_POWERUP_QUAD",
 	"EV_POWERUP_BATTLESUIT",
 	"EV_POWERUP_BATTLESUIT_SURV",
+	"EV_POWERUP_XSHIELD",
 	"EV_POWERUP_REGEN",
 	"EV_GIB_PLAYER",         // gib a previously living player
 	"EV_GIB_VAMPIRISM",
@@ -8675,6 +8837,7 @@ char *eventnames[] = {
 	"EV_QUICKGRENS",
 	"EV_PLAYER_HIT",
 	"EV_STOP_RELOADING_SOUND",
+	"EV_EMP_WAVE",
 
 	"EV_MAX_EVENTS"
 };
@@ -9135,163 +9298,7 @@ qboolean PC_String_ParseNoAlloc( int handle, char *out, size_t size ) {
 	return qtrue;
 }
 
-
-// Real printable charater count
-int BG_drawStrlen( const char *str ) {
-	int cnt = 0;
-
-	while ( *str ) {
-		if ( Q_IsColorString( str ) ) {
-			str += 2;
-		} else {
-			cnt++;
-			str++;
-		}
-	}
-	return( cnt );
-}
-
-
-// Copies a color string, with limit of real chars to print
-//		in = reference buffer w/color
-//		out = target buffer
-//		str_max = max size of printable string
-//		out_max = max size of target buffer
-//
-// Returns size of printable string
-int BG_colorstrncpyz( char *in, char *out, int str_max, int out_max ) {
-	int str_len = 0;    // current printable string size
-	int out_len = 0;    // current true string size
-	const int in_len = strlen( in );
-
-	out_max--;
-	while ( *in && out_len < out_max && str_len < str_max ) {
-		if ( *in == '^' ) {
-			if ( out_len + 2 >= in_len && out_len + 2 >= out_max ) {
-				break;
-			}
-
-			*out++ = *in++;
-			*out++ = *in++;
-			out_len += 2;
-			continue;
-		}
-
-		*out++ = *in++;
-		str_len++;
-		out_len++;
-	}
-
-	*out = 0;
-
-	return( str_len );
-}
-
-int BG_strRelPos( char *in, int index ) {
-	int cPrintable = 0;
-	const char *ref = in;
-
-	while ( *ref && cPrintable < index ) {
-		if ( Q_IsColorString( ref ) ) {
-			ref += 2;
-		} else {
-			ref++;
-			cPrintable++;
-		}
-	}
-
-	return( ref - in );
-}
-
-// strip colors and control codes, copying up to dwMaxLength-1 "good" chars and nul-terminating
-// returns the length of the cleaned string
-int BG_cleanName( const char *pszIn, char *pszOut, unsigned int dwMaxLength, qboolean fCRLF ) {
-	const char *pInCopy = pszIn;
-	const char *pszOutStart = pszOut;
-
-	while ( *pInCopy && ( pszOut - pszOutStart < dwMaxLength - 1 ) ) {
-		if ( *pInCopy == '^' ) {
-			pInCopy += ( ( pInCopy[1] == 0 ) ? 1 : 2 );
-		} else if ( ( *pInCopy < 32 && ( !fCRLF || *pInCopy != '\n' ) ) || ( *pInCopy > 126 ) )    {
-			pInCopy++;
-		} else {
-			*pszOut++ = *pInCopy++;
-		}
-	}
-
-	*pszOut = 0;
-	return( pszOut - pszOutStart );
-}
-
-// Only used locally
-typedef struct {
-	char *colorname;
-	vec4_t *color;
-} colorTable_t;
-
 extern void trap_Cvar_Set( const char *var_name, const char *value );
-
-
-
-///////////////////////////////////////////////////////////////////////////////
-typedef struct locInfo_s {
-	vec2_t gridStartCoord;
-	vec2_t gridStep;
-} locInfo_t;
-
-static locInfo_t locInfo;
-
-void BG_InitLocations( vec2_t world_mins, vec2_t world_maxs ) {
-	// keep this in sync with CG_DrawGrid
-	locInfo.gridStep[0] = 1200.f;
-	locInfo.gridStep[1] = 1200.f;
-
-	// ensure minimal grid density
-	while ( ( world_maxs[0] - world_mins[0] ) / locInfo.gridStep[0] < 7 )
-		locInfo.gridStep[0] -= 50.f;
-	while ( ( world_mins[1] - world_maxs[1] ) / locInfo.gridStep[1] < 7 )
-		locInfo.gridStep[1] -= 50.f;
-
-	locInfo.gridStartCoord[0] = world_mins[0] + .5f * ( ( ( ( world_maxs[0] - world_mins[0] ) / locInfo.gridStep[0] ) - ( (int)( ( world_maxs[0] - world_mins[0] ) / locInfo.gridStep[0] ) ) ) * locInfo.gridStep[0] );
-	locInfo.gridStartCoord[1] = world_mins[1] - .5f * ( ( ( ( world_mins[1] - world_maxs[1] ) / locInfo.gridStep[1] ) - ( (int)( ( world_mins[1] - world_maxs[1] ) / locInfo.gridStep[1] ) ) ) * locInfo.gridStep[1] );
-}
-
-char *BG_GetLocationString( vec_t* pos ) {
-	static char coord[6];
-	int x, y;
-
-	coord[0] = '\0';
-
-	x = ( pos[0] - locInfo.gridStartCoord[0] ) / locInfo.gridStep[0];
-	y = ( locInfo.gridStartCoord[1] - pos[1] ) / locInfo.gridStep[1];
-
-	if ( x < 0 ) {
-		x = 0;
-	}
-	if ( y < 0 ) {
-		y = 0;
-	}
-
-	Com_sprintf( coord, sizeof( coord ), "%c,%i", 'A' + x, y );
-
-	return coord;
-}
-
-qboolean BG_BBoxCollision( vec3_t min1, vec3_t max1, vec3_t min2, vec3_t max2 ) {
-	int i;
-
-	for ( i = 0; i < 3; i++ ) {
-		if ( min1[i] > max2[i] ) {
-			return qfalse;
-		}
-		if ( min2[i] > max1[i] ) {
-			return qfalse;
-		}
-	}
-
-	return qtrue;
-}
-
 
 /*
 =================
@@ -9416,6 +9423,7 @@ char *BG_GetWeaponFilename( weapon_t weaponNum )
 		case WP_BAR:               return "bar.weap";
 		case WP_M97:               return "ithaca.weap";
 		case WP_AUTO5:             return "auto5.weap";
+		case WP_M30:               return "m30.weap";
 		case WP_FLAMETHROWER:      return "flamethrower.weap";
 		case WP_PANZERFAUST:       return "panzerfaust.weap";
 		case WP_MG42M:             return "mg42m.weap";
@@ -9795,6 +9803,7 @@ qboolean BG_ParseAmmoTable( int handle, weapon_t weaponNum )
 
 
 // Set weapon parameters for specified skill
+
 void BG_SetWeaponForSkill( weapon_t weaponNum, gameskill_t skill ) {
 	if ( ammoSkill[skill][weaponNum].maxammo > 0 )
 		ammoTable[weaponNum].maxammo = ammoSkill[skill][weaponNum].maxammo;
@@ -9808,27 +9817,42 @@ void BG_SetWeaponForSkill( weapon_t weaponNum, gameskill_t skill ) {
 	if ( ammoSkill[skill][weaponNum].maxammoUpgraded > 0 )
 		ammoTable[weaponNum].maxammoUpgraded = ammoSkill[skill][weaponNum].maxammoUpgraded;
 }
-
 /*
 ==========================
 BG_GetMaxClip
 
 Returns the correct clip size for the given weapon and player state,
-taking into account whether the weapon is upgraded.
+taking into account the weapon upgrade level.
 ==========================
 */
 int BG_GetMaxClip(const playerState_t *ps, int weapon) {
+	int upgradeLevel;
+	int maxClip;
+
 	if (!ps || weapon <= WP_NONE || weapon >= WP_NUM_WEAPONS) {
 		return 0;
 	}
 
 	const ammoTable_t *wt = &ammoTable[weapon];
 
-	if (ps->weaponUpgraded[weapon]) {
-		return wt->maxclipUpgraded;
-	} else {
-		return wt->maxclip;
+	upgradeLevel = ps->weaponUpgraded[weapon];
+	if (upgradeLevel < 0) {
+		upgradeLevel = 0;
 	}
+
+	if (upgradeLevel >= 1) {
+		maxClip = wt->maxclipUpgraded;
+
+		if (upgradeLevel == 2) {
+			maxClip *= 1.5f;
+		} else if (upgradeLevel >= 3) {
+			maxClip *= 2.0f;
+		}
+
+		return maxClip;
+	}
+
+	return wt->maxclip;
 }
 
 /*
@@ -9840,17 +9864,36 @@ taking into account whether the weapon is upgraded and any class-specific bonuse
 ==========================
 */
 int BG_GetMaxAmmo(const playerState_t *ps, int weapon, float ltAmmoBonus) {
+	int maxAmmo;
+	int upgradeLevel;
+
 	if (!ps || weapon <= WP_NONE || weapon >= WP_NUM_WEAPONS) {
 		return 0;
 	}
 
 	const ammoTable_t *wt = &ammoTable[weapon];
-	int maxAmmo = ps->weaponUpgraded[weapon]
-		? wt->maxammoUpgraded
-		: wt->maxammo;
+
+	upgradeLevel = ps->weaponUpgraded[weapon];
+	if (upgradeLevel < 0) {
+		upgradeLevel = 0;
+	}
+
+	if (upgradeLevel >= 1) {
+		float multiplier = 1.0f;
+
+		if (upgradeLevel == 2) {
+			multiplier = 1.5f;
+		} else if (upgradeLevel >= 3) {
+			multiplier = 2.0f;
+		}
+
+		maxAmmo = (int)(wt->maxammoUpgraded * multiplier);
+	} else {
+		maxAmmo = wt->maxammo;
+	}
 
 	if (ps->stats[STAT_PLAYER_CLASS] == PC_LT) {
-		maxAmmo *= ltAmmoBonus;
+		maxAmmo = (int)(maxAmmo * ltAmmoBonus);
 	}
 
 	return maxAmmo;

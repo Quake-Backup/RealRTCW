@@ -510,6 +510,7 @@ static float PM_CmdScale( usercmd_t *cmd ) {
 		     scale *= 1.3;
 			 break;
 		case AICHAR_ZOMBIE_SURV:
+		case AICHAR_FLESH:
 		case AICHAR_ZOMBIE_FLAME:
 		     scale *= 1.1;
 			 break;
@@ -2219,11 +2220,15 @@ static void PM_BeginWeaponReload( int weapon ) {
 		return;
 	}
 
-	if((weapon == WP_M1GARAND) && pm->ps->ammoclip[WP_M1GARAND] != 0) {
-			return;	
+	if ((weapon == WP_M1GARAND) &&
+		pm->ps->weaponUpgraded[WP_M1GARAND] <= 0 &&
+		pm->ps->ammoclip[WP_M1GARAND] != 0)
+	{
+		return;
 	}
 
-	if (weapon == WP_M1941)
+	if (weapon == WP_M1941 &&
+		pm->ps->weaponUpgraded[WP_M1941] <= 0)
 	{
 		int maxclip = BG_GetMaxClip(pm->ps, WP_M1941);
 		if (pm->ps->ammoclip[WP_M1941] > (0.5f * maxclip))
@@ -2427,6 +2432,12 @@ void PM_BeginWeaponChange( int oldweapon, int newweapon, qboolean reload ) { //-
 	}
 
 	switchtime = 250;   // dropping/raising usually takes 1/4 sec.
+
+	// Fast Hands PRO: faster weapon switch
+	if ( pm->ps->perks[PERK_WEAPONHANDLING] >= 2 ) {
+		switchtime = 100;
+	}
+
 	// sometimes different switch times for alt weapons
 	switch ( oldweapon ) {
 	case WP_M1GARAND:
@@ -2516,6 +2527,11 @@ static void PM_FinishWeaponChange( void ) {
 	// dropping/raising usually takes 1/4 sec.
 	switchtime = 250;
 
+	// Fast Hands PRO: faster weapon switch
+	if ( pm->ps->perks[PERK_WEAPONHANDLING] >= 2 ) {
+		switchtime = 100;
+	}
+
 	// sometimes different switch times for alt weapons
 	switch ( newweapon ) {
 	case WP_FG42:
@@ -2575,6 +2591,7 @@ PM_ReloadClip
 static void PM_ReloadClip(int weapon) {
 	int clipIndex = BG_FindClipForWeapon(weapon);
 	int ammoIndex = BG_FindAmmoForWeapon(weapon);
+	int upgradeLevel;
 
 	int ammoreserve = pm->ps->ammo[ammoIndex];
 	int ammoclip    = pm->ps->ammoclip[clipIndex];
@@ -2582,13 +2599,30 @@ static void PM_ReloadClip(int weapon) {
 	int maxclip = BG_GetMaxClip(pm->ps, weapon);
 	int ammomove = maxclip - ammoclip;
 
+	upgradeLevel = pm->ps->weaponUpgraded[weapon];
+	if (upgradeLevel < 0) {
+		upgradeLevel = 0;
+	}
+
 	// Jaymod logic overrides
 	if (!pm->ps->aiChar) {
 		if (weapon == WP_M97 || weapon == WP_AUTO5) {
 			ammomove = 1;
+
+			if (pm->ps->perks[PERK_WEAPONHANDLING]) {
+				ammomove++;
+			}
+
+			if (upgradeLevel > 0) {
+				ammomove++;
+			}
+
+			if (ammomove > (maxclip - ammoclip)) {
+				ammomove = maxclip - ammoclip;
+			}
 		}
 
-		if (weapon == WP_M1941 && ammoclip > 0) {
+		if (weapon == WP_M1941 && ammoclip > 0 && upgradeLevel <= 0) {
 			ammomove = 5;
 		}
 	}
@@ -2600,14 +2634,6 @@ static void PM_ReloadClip(int weapon) {
 	if (ammomove > 0) {
 		pm->ps->ammo[ammoIndex]     -= ammomove;
 		pm->ps->ammoclip[clipIndex] += ammomove;
-	}
-
-	// Reload secondary weapon if akimbo
-	if (weapon == WP_AKIMBO) {
-		PM_ReloadClip(WP_COLT);
-	}
-	if (weapon == WP_DUAL_TT33) {
-		PM_ReloadClip(WP_TT33);
 	}
 }
 
@@ -2732,45 +2758,10 @@ void PM_CheckForReload(int weapon) {
 			if (pm->ps->ammoclip[clipWeap] < BG_GetMaxClip(pm->ps, weapon)) {
 				doReload = qtrue;
 			}
-
-			// Dual weapon check (Colt or TT33)
-			if (weapon == WP_AKIMBO) {
-				int coltClip = BG_FindClipForWeapon(WP_COLT);
-				if (pm->ps->ammoclip[coltClip] < BG_GetMaxClip(pm->ps, WP_COLT)) {
-					doReload = qtrue;
-				}
-			} else if (weapon == WP_DUAL_TT33) {
-				int tt33Clip = BG_FindClipForWeapon(WP_TT33);
-				if (pm->ps->ammoclip[tt33Clip] < BG_GetMaxClip(pm->ps, WP_TT33)) {
-					doReload = qtrue;
-				}
-			}
 		}
 	} else if (autoreload) {
 		if (pm->ps->ammoclip[clipWeap] == 0 && pm->ps->ammo[ammoWeap]) {
-			switch (weapon) {
-				case WP_AKIMBO:
-					if (pm->ps->ammoclip[WP_COLT] == 0) doReload = qtrue;
-					break;
-				case WP_DUAL_TT33:
-					if (pm->ps->ammoclip[WP_TT33] == 0) doReload = qtrue;
-					break;
-				case WP_COLT:
-					if (pm->ps->weapon == WP_AKIMBO && pm->ps->ammoclip[WP_AKIMBO] == 0)
-						doReload = qtrue;
-					else
-						doReload = qtrue;
-					break;
-				case WP_TT33:
-					if (pm->ps->weapon == WP_DUAL_TT33 && pm->ps->ammoclip[WP_DUAL_TT33] == 0)
-						doReload = qtrue;
-					else
-						doReload = qtrue;
-					break;
-				default:
-					doReload = qtrue;
-					break;
-			}
+			doReload = qtrue;
 		}
 	}
 
@@ -2842,16 +2833,6 @@ void PM_WeaponUseAmmo( int wp, int amount ) {
 		pm->ps->ammo[ BG_FindAmmoForWeapon( wp )] -= amount;
 	} else {
 		takeweapon = BG_FindClipForWeapon( wp );
-		if ( wp == WP_AKIMBO ) {
-			if ( !BG_AkimboFireSequence( wp, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] ) ) {
-				takeweapon = WP_COLT;
-			}
-		} else if ( wp == WP_DUAL_TT33 ) {
-			if ( !BG_AkimboFireSequence( wp, pm->ps->ammoclip[WP_DUAL_TT33], pm->ps->ammoclip[WP_TT33] ) ) {
-				takeweapon = WP_TT33;
-			}
-		}
-
 		pm->ps->ammoclip[takeweapon] -= amount;
 	}
 }
@@ -2869,16 +2850,6 @@ int PM_WeaponAmmoAvailable( int wp ) {
 		return pm->ps->ammo[ BG_FindAmmoForWeapon( wp )];
 	} else {
 		takeweapon = BG_FindClipForWeapon( wp );
-		if ( wp == WP_AKIMBO ) {
-			if ( !BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] ) ) {
-				takeweapon = WP_COLT;
-			}
-		} else if ( wp == WP_DUAL_TT33 ) {
-			if ( !BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_DUAL_TT33], pm->ps->ammoclip[WP_TT33] ) ) {
-				takeweapon = WP_TT33;
-			}
-		}
-
 		return pm->ps->ammoclip[takeweapon];
 	}
 }
@@ -3278,8 +3249,8 @@ static void PM_Weapon( void ) {
 		return;
 	}
 
-	akimboFire_colt = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_AKIMBO], pm->ps->ammoclip[WP_COLT] );
-	akimboFire_tt33 = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_DUAL_TT33], pm->ps->ammoclip[WP_TT33] );
+	akimboFire_colt = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_AKIMBO] );
+	akimboFire_tt33 = BG_AkimboFireSequence( pm->ps->weapon, pm->ps->ammoclip[WP_DUAL_TT33] );
 
 	if ( 0 ) {
 		switch ( pm->ps->weaponstate ) {
@@ -3660,6 +3631,7 @@ static void PM_Weapon( void ) {
 	case WP_FG42SCOPE:
 	case WP_M97:
 	case WP_AUTO5:
+	case WP_M30:
 	case WP_AIRSTRIKE:
 	case WP_POISONGAS:
 	case WP_SMOKE_BOMB:
@@ -3903,6 +3875,7 @@ static void PM_Weapon( void ) {
 	case WP_DYNAMITE_ENG:
 	case WP_M97:
 	case WP_AUTO5:
+	case WP_M30:
     case WP_M7:
 		PM_StartWeaponAnim( weapattackanim );
 		break;
@@ -4002,20 +3975,8 @@ static void PM_Weapon( void ) {
 	        }
 	    break;
 	    case WP_AKIMBO:
+		case WP_DUAL_TT33:
 		    addTime = BG_GetNextShotTime(pm->ps, pm->ps->weapon, qfalse);
-		       if ( !pm->ps->ammoclip[WP_AKIMBO] || !pm->ps->ammoclip[WP_COLT] ) {
-			       if ( ( !pm->ps->ammoclip[WP_AKIMBO] && !akimboFire_colt ) || ( !pm->ps->ammoclip[WP_COLT] && akimboFire_colt ) ) {
-				        addTime = 2 * BG_GetNextShotTime(pm->ps, pm->ps->weapon, qfalse);
-			       }
-		       }
-		break;
-	    case WP_DUAL_TT33:
-		    addTime = BG_GetNextShotTime(pm->ps, pm->ps->weapon, qfalse);
-		       if ( !pm->ps->ammoclip[WP_DUAL_TT33] || !pm->ps->ammoclip[WP_TT33] ) {
-			       if ( ( !pm->ps->ammoclip[WP_DUAL_TT33] && !akimboFire_tt33 ) || ( !pm->ps->ammoclip[WP_TT33] && akimboFire_tt33 ) ) {
-				        addTime = 2 * BG_GetNextShotTime(pm->ps, pm->ps->weapon, qfalse);
-			       }
-		       }
 		break;
 	}
 
@@ -4072,8 +4033,12 @@ static void PM_Weapon( void ) {
 	}
 
 
-	if ( pm->ps->perks[PERK_RIFLING] ) {
+	if ( pm->ps->perks[PERK_RIFLING] && pm->ps->weapon != WP_KNIFE ) {
 		addTime /= 1.25;
+	}
+
+	if ( pm->ps->perks[PERK_WEAPONHANDLING] >= 2 && pm->ps->weapon == WP_KNIFE ) {
+		addTime /= 1.5;
 	}
 
 	// add the recoil amount to the aimSpreadScale

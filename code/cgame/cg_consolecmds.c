@@ -208,6 +208,64 @@ static void CG_InventoryUp_f( void ) {
 
 //----(SA)	end
 
+static void CG_WeaponWheelDown_f( void ) {
+
+	if (cg.snap->ps.eFlags & EF_MG42_ACTIVE)
+	{
+		return;
+	}
+
+	if (cg.snap->ps.eFlags & EF_DEAD)
+	{
+		return;
+	}
+
+	if ( cg.zoomedScope ) {
+		return;
+	}
+
+	if ( cg.zoomedBinoc ) {
+		return;
+	}
+
+	cg.weaponWheel.openTime = cg.time;
+
+	cgs.cursorX = SCREEN_WIDTH * 0.35f;
+	cgs.cursorY = SCREEN_HEIGHT * 0.5f;
+
+	cg.weaponWheel.stickX = 0.0f;
+	cg.weaponWheel.stickY = 0.0f;
+
+	cg.weaponWheel.active = qtrue;
+	trap_Cvar_Set( "cg_weaponWheelActive", "1" );
+
+	cg.weaponWheel.hoveredBank = 0;
+	cg.weaponWheel.hoveredWeapon = 0;
+	cg.weaponWheel.latchedWeapon = 0;
+	cg.weaponWheel.lastWeapon = 0;
+}
+
+static void CG_WeaponWheelUp_f( void ) {
+	if ( !cg.weaponWheel.active ) {
+		return;
+	}
+
+	cg.weaponWheel.stickX = 0.0f;
+	cg.weaponWheel.stickY = 0.0f;
+
+	cg.weaponWheel.active = qfalse;
+	trap_Cvar_Set( "cg_weaponWheelActive", "0" );
+
+	int weapon = cg.weaponWheel.latchedWeapon > 0
+					 ? cg.weaponWheel.latchedWeapon
+					 : cg.weaponWheel.hoveredWeapon;
+
+	if (weapon > 0)
+	{
+		CG_FinishWeaponChange(cg.weaponSelect, weapon);
+	}
+}
+
 static void CG_TellTarget_f( void ) {
 	int clientNum;
 	char command[128];
@@ -560,53 +618,54 @@ typedef struct {
 } consoleCommand_t;
 
 static consoleCommand_t commands[] = {
-	{ "testgun", CG_TestGun_f },
-	{ "testmodel", CG_TestModel_f },
-	{ "nextframe", CG_TestModelNextFrame_f },
-	{ "prevframe", CG_TestModelPrevFrame_f },
-	{ "nextskin", CG_TestModelNextSkin_f },
-	{ "prevskin", CG_TestModelPrevSkin_f },
-	{ "viewpos", CG_Viewpos_f },
-	{ "+scores", CG_ScoresDown_f },
-	{ "-scores", CG_ScoresUp_f },
-	{ "+inventory", CG_InventoryDown_f },
-	{ "-inventory", CG_InventoryUp_f },
-//	{ "+zoom", CG_ZoomDown_f },		// (SA) zoom moved to a wbutton so server can determine weapon firing based on zoom status
-//	{ "-zoom", CG_ZoomUp_f },
-	{ "zoomin", CG_ZoomIn_f },
-	{ "zoomout", CG_ZoomOut_f },
-	{ "sizeup", CG_SizeUp_f },
-	{ "sizedown", CG_SizeDown_f },
-	{ "weaplastused", CG_LastWeaponUsed_f },
-	{ "weapnextinbank", CG_NextWeaponInBank_f },
-	{ "weapprevinbank", CG_PrevWeaponInBank_f },
-	{ "weapnext", CG_NextWeapon_f },
-	{ "weapprev", CG_PrevWeapon_f },
-	{ "weapalt", CG_AltWeapon_f },
-	{ "weapon", CG_Weapon_f },
-	{ "weaponbank", CG_WeaponBank_f },
-	{ "itemnext", CG_NextItem_f },
-	{ "itemprev", CG_PrevItem_f },
-	{ "item", CG_Item_f },
-	{ "tell_target", CG_TellTarget_f },
-	{ "tell_attacker", CG_TellAttacker_f },
-	{ "tcmd", CG_TargetCommand_f },
-	{ "loadhud", CG_LoadHud_f },
-	{ "loaddeferred", CG_LoadDeferredPlayers },  // spelling fixed (SA)
-	{ "camera", CG_Camera_f },   // duffy
-	{ "fade", CG_Fade_f },   // duffy
-	{ "loadweapons", CG_LoadWeapons_f },
+	{"testgun", CG_TestGun_f},
+	{"testmodel", CG_TestModel_f},
+	{"nextframe", CG_TestModelNextFrame_f},
+	{"prevframe", CG_TestModelPrevFrame_f},
+	{"nextskin", CG_TestModelNextSkin_f},
+	{"prevskin", CG_TestModelPrevSkin_f},
+	{"viewpos", CG_Viewpos_f},
+	{"+scores", CG_ScoresDown_f},
+	{"-scores", CG_ScoresUp_f},
+	{"+inventory", CG_InventoryDown_f},
+	{"-inventory", CG_InventoryUp_f},
+	//	{ "+zoom", CG_ZoomDown_f },		// (SA) zoom moved to a wbutton so server can determine weapon firing based on zoom status
+	//	{ "-zoom", CG_ZoomUp_f },
+	{"zoomin", CG_ZoomIn_f},
+	{"zoomout", CG_ZoomOut_f},
+	{"sizeup", CG_SizeUp_f},
+	{"sizedown", CG_SizeDown_f},
+	{"weaplastused", CG_LastWeaponUsed_f},
+	{"weapnextinbank", CG_NextWeaponInBank_f},
+	{"weapprevinbank", CG_PrevWeaponInBank_f},
+	{"weapnext", CG_NextWeapon_f},
+	{"weapprev", CG_PrevWeapon_f},
+	{"weapalt", CG_AltWeapon_f},
+	{"weapon", CG_Weapon_f},
+	{"weaponbank", CG_WeaponBank_f},
+	{"itemnext", CG_NextItem_f},
+	{"itemprev", CG_PrevItem_f},
+	{"item", CG_Item_f},
+	{"tell_target", CG_TellTarget_f},
+	{"tell_attacker", CG_TellAttacker_f},
+	{"tcmd", CG_TargetCommand_f},
+	{"loadhud", CG_LoadHud_f},
+	{"loaddeferred", CG_LoadDeferredPlayers}, // spelling fixed (SA)
+	{"camera", CG_Camera_f},				  // duffy
+	{"fade", CG_Fade_f},					  // duffy
+	{"loadweapons", CG_LoadWeapons_f},
 
 	// NERVE - SMF
-	{ "mp_QuickMessage", CG_QuickMessage_f },
-	{ "OpenLimboMenu", CG_OpenLimbo_f },
-	{ "CloseLimboMenu", CG_CloseLimbo_f },
-	{ "LimboMessage", CG_LimboMessage_f },
+	{"mp_QuickMessage", CG_QuickMessage_f},
+	{"OpenLimboMenu", CG_OpenLimbo_f},
+	{"CloseLimboMenu", CG_CloseLimbo_f},
+	{"LimboMessage", CG_LimboMessage_f},
 	// -NERVE - SMF
-	{ "dumploc", CG_DumpLocation_f },
-	{ "dumpcastai", CG_DumpCastAi_f }
+	{"dumploc", CG_DumpLocation_f},
+	{"dumpcastai", CG_DumpCastAi_f},
+	{"+weaponwheel", CG_WeaponWheelDown_f},
+	{"-weaponwheel", CG_WeaponWheelUp_f}
 };
-
 
 /*
 =================

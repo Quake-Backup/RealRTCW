@@ -150,7 +150,8 @@ qboolean AICast_ScriptAction_GotoMarker( cast_state_t *cs, char *params ) {
 	pString = params;
 	token = COM_ParseExt( &pString, qfalse );
 	if ( !token[0] ) {
-		G_Error( "AI Scripting: gotomarker must have an targetname\n" );
+		G_Printf( "WARNING: AI Scripting: gotomarker must have an targetname\n" );
+		return qtrue;
 	}
 
 	// if we already are going to the marker, just use that, and check if we're in range
@@ -182,7 +183,9 @@ qboolean AICast_ScriptAction_GotoMarker( cast_state_t *cs, char *params ) {
 					if ( !ent ) {
 						ent = AICast_FindEntityForName( token );
 						if ( !ent ) {
-							G_Error( "AI Scripting: gotomarker cannot find targetname \"%s\"\n", token );
+							G_Printf( "WARNING: AI Scripting: gotomarker cannot find targetname \"%s\"\n", token );
+							cs->followTime = level.time + 500;
+							return qfalse;
 						}
 					}
 					// set the view angle manually
@@ -287,10 +290,19 @@ qboolean AICast_ScriptAction_GotoMarker( cast_state_t *cs, char *params ) {
 
     if ( !ent ) {
         if ( !groupMode ) {
-            G_Error( "AI Scripting: gotomarker can't find ai_marker with \"targetname\" = \"%s\"\n", prefix );
+            G_Printf( "WARNING: AI Scripting: gotomarker can't find ai_marker with \"targetname\" = \"%s\"\n", prefix );
         } else {
-            G_Error( "AI Scripting: gotomarker can't find ai_marker with prefix \"%s*\"\n", prefix );
+            G_Printf( "WARNING: AI Scripting: gotomarker can't find ai_marker with prefix \"%s*\"\n", prefix );
         }
+
+        cs->castScriptStatus.scriptGotoEnt = -1;
+        cs->castScriptStatus.scriptGotoId = 0;
+        cs->castScriptStatus.scriptGotoIsGroup = qfalse;
+        cs->castScriptStatus.scriptNoMoveTime = 0;
+        cs->followTime = 0;
+        cs->followIsGoto = qfalse;
+        AIFunc_IdleStart( cs );
+        return qtrue;
     }
 
     // Remember which mode we used, so the cached section doesn't compare exact name
@@ -1794,6 +1806,21 @@ qboolean AICast_ScriptAction_GiveHealth( cast_state_t *cs, char *params ) {
 
 }
 
+qboolean AICast_ScriptAction_ApplyLoadout( cast_state_t *cs, char *params ) {
+    gentity_t *player;
+
+    if ( !params || !params[0] ) {
+        G_Error( "AI Scripting: applyloadout requires loadout name\n" );
+    }
+
+    player = AICast_FindEntityForName( "player" );
+    if ( !player ) {
+        return qfalse;
+    }
+
+    return AICast_Loadouts_ApplyToEnt( cs, player, params );
+}
+
 /*
 =================
 AICast_ScriptAction_GiveWeapon
@@ -1865,7 +1892,7 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params ) {
 		{
 			if (g_newinventory.integer > 0 || g_gametype.integer == GT_SURVIVAL)
 			{
-				if (weapon != WP_AIRSTRIKE && weapon != WP_ARTY && weapon != WP_POISONGAS && weapon != WP_DYNAMITE_ENG && weapon != WP_DYNAMITE && weapon != WP_SMOKE_BOMB) // Skip WP_AIRSTRIKE and WP_ARTY	
+				if (weapon != WP_AIRSTRIKE && weapon != WP_GRENADE_LAUNCHER && weapon != WP_GRENADE_PINEAPPLE && weapon != WP_ARTY && weapon != WP_POISONGAS && weapon != WP_DYNAMITE_ENG && weapon != WP_DYNAMITE && weapon != WP_SMOKE_BOMB && weapon != WP_M7) // Skip WP_AIRSTRIKE and WP_ARTY	
 				{
 					if (ent->client->ps.stats[STAT_PLAYER_CLASS] == PC_SOLDIER)
 					{
@@ -2729,7 +2756,7 @@ qboolean AICast_ScriptAction_SaveCheckpoint ( cast_state_t *cs, char *params ) {
 	saveName = COM_ParseExt( &pString, qfalse );
 	if ( !saveName[0] ) {
 		G_SaveGame( "lastcheckpoint" );	// save the default "current" savegame  
-		G_SaveGame( "current" );	   // save the default "current" savegame
+		G_SaveGame( "current_realrtcw" );	   // save the default "current" savegame
 	} else {
 		G_SaveGame( saveName );
 	}
@@ -4049,9 +4076,7 @@ qboolean AICast_ScriptAction_Teleport( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
-
-
-extern void G_EndGame( void );
+extern void G_ScheduleEndgame( int delay );
 
 /*
 ==============
@@ -4061,7 +4086,7 @@ AICast_ScriptAction_EndGame
 ==============
 */
 qboolean AICast_ScriptAction_EndGame( cast_state_t *cs, char *params ) {
-	g_endgameTriggered = qtrue;
+	G_ScheduleEndgame( 100 );
 	return qtrue;
 }
 
@@ -4087,6 +4112,93 @@ qboolean AICast_ScriptAction_Announce( gentity_t *ent, char *params ) {
 	return qtrue;
 }
 
+static qboolean AICast_IsSafeTransitionToken( const char *s ) {
+	int i;
+	char c;
+
+	if ( !s || !s[0] ) {
+		return qfalse;
+	}
+
+	for ( i = 0; s[i]; i++ ) {
+		c = s[i];
+
+		if ( ( c >= 'a' && c <= 'z' ) ||
+			 ( c >= 'A' && c <= 'Z' ) ||
+			 ( c >= '0' && c <= '9' ) ||
+			 c == '_' || c == '-' || c == '/' ) {
+			continue;
+		}
+
+		return qfalse;
+	}
+
+	return qtrue;
+}
+
+qboolean AICast_ScriptAction_TransitiontoMod( cast_state_t *cs, char *params ) {
+	char *p1, *p2;
+	char fsGame[MAX_QPATH];
+	char mapName[MAX_QPATH];
+	gentity_t   *player;
+	int exitTime = 8000;
+
+	player = AICast_FindEntityForName( "player" );
+
+	p1 = params;
+	p2 = strchr( params, ' ' );
+
+	if ( !p2 ) {
+		G_Printf( "AI Scripting: transitiontomod requires <fs_game> <mapname>\n" );
+		return qfalse;
+	}
+
+	while ( *p2 == ' ' ) {
+		*p2++ = '\0';
+	}
+
+	if ( !*p1 || !*p2 ) {
+		G_Printf( "AI Scripting: transitiontomod requires <fs_game> <mapname>\n" );
+		return qfalse;
+	}
+
+	Q_strncpyz( fsGame, p1, sizeof( fsGame ) );
+	Q_strncpyz( mapName, p2, sizeof( mapName ) );
+
+	if ( !AICast_IsSafeTransitionToken( fsGame ) ) {
+		G_Printf( "AI Scripting: transitiontomod invalid fs_game '%s'\n", fsGame );
+		return qfalse;
+	}
+
+	if ( !AICast_IsSafeTransitionToken( mapName ) ) {
+		G_Printf( "AI Scripting: transitiontomod invalid map '%s'\n", mapName );
+		return qfalse;
+	}
+
+	// double check that player exists and is alive
+	if ( !player || player->health <= 0 ) {
+		return qtrue;
+	}
+
+	// don't process if already changing
+	if ( g_reloading.integer ) {
+		return qtrue;
+	}
+
+	trap_SendServerCommand( -1, "mu_play sound/music/l_complete_1.wav 0\n" );
+	trap_SetConfigstring( CS_MUSIC_QUEUE, "" );
+	trap_SetConfigstring( CS_SCREENFADE, va( "1 %i %i", level.time + 250, 750 + exitTime ) );
+	trap_SendServerCommand( -1, va( "snd_fade 0 %d", 1000 + exitTime ) );
+
+	level.reloadDelayTime = level.time + 1000 + exitTime;
+	trap_Cvar_Set( "g_reloading", va( "%d", RELOAD_NEXTMAP_WAITING ) );
+
+	Q_strncpyz( level.nextMap, mapName, sizeof( level.nextMap ) );
+	Q_strncpyz( level.nextFSGame, fsGame, sizeof( level.nextFSGame ) );
+	level.pendingFSGameChange = qtrue;
+
+	return qtrue;
+}
 
 
 /*
@@ -4104,99 +4216,121 @@ AICast_ScriptAction_ChangeLevel
 */
 qboolean AICast_ScriptAction_ChangeLevel( cast_state_t *cs, char *params ) {
 	int i;
-	char *pch, *pch2, *newstr;
+	char *pch, *pch2, *newstr, *scan;
 	gentity_t   *player;
 	//gentity_t *ent;
 	//int client;
 	player = AICast_FindEntityForName( "player" );
-	qboolean silent = qfalse, endgame = qfalse, savepersist = qfalse;
+	qboolean silent = qfalse, savepersist = qfalse, delayedEndgame = qfalse;
 	int exitTime = 8000;
 
-	if (g_decaychallenge.integer)
-	{
+	if ( g_decaychallenge.integer ) {
 		player->health = 999;
 	}
 
 	// Endmap bonuses for finding all secrets
-	if (g_endmapbonus.integer && level.numSecrets > 0) {
-	   if (player->numSecretsFound == level.numSecrets) 
-	   {
-          trap_SendServerCommand( -1, "mu_play sound/misc/bonus.wav 0\n" );
-		  AICast_ScriptEvent( AICast_GetCastState( player->s.number ), "trigger", "endmap_bonus" );
-	   }
+	if ( g_endmapbonus.integer && level.numSecrets > 0 ) {
+		if ( player->numSecretsFound == level.numSecrets ) {
+			trap_SendServerCommand( -1, "mu_play sound/misc/bonus.wav 0\n" );
+			AICast_ScriptEvent( AICast_GetCastState( player->s.number ), "trigger", "endmap_bonus" );
+		}
 	}
 
 	player = AICast_FindEntityForName( "player" );
 	// double check that they are still alive
 	if ( player->health <= 0 ) {
 		return qtrue;   // get out of here
-
 	}
+
 	// don't process if already changing
 	if ( g_reloading.integer ) {
 		return qtrue;
 	}
 
-	// save persistent data if required
-	newstr = va( "%s", params );
-	pch = strstr( newstr, " persistent" ); // (SA) whoops, this was mis-spelled
-	if ( pch ) {
-		pch = strstr( newstr, " " );
-		*pch = '\0';
-		savepersist = qtrue;
-	}
+	// compatibility: bare "changelevel" with no params means delayed endgame,
+	// but still keep the old music/fade staging
+	if ( !params || !params[0] ) {
+		delayedEndgame = qtrue;
+		newstr = "";
+	} else {
+		// save persistent data if required
+		newstr = va( "%s", params );
+		while ( *newstr && *newstr <= ' ' ) {
+			newstr++;
+		}
+		pch = strstr( newstr, " persistent" ); // (SA) whoops, this was mis-spelled
+		if ( pch ) {
+			*pch = '\0';
+			savepersist = qtrue;
+		}
 
-	//
-	newstr = va( "%s", params );
-	pch = strstr( newstr, " silent" );
-	if ( pch ) {
-		pch = strstr( newstr, " " );
-		*pch = '\0';
-		silent = qtrue;
-	}
-
-	// make sure we strip any params after the mapname
-	newstr = va( "%s", params );
-	pch = strstr( newstr, " " );
-	if ( pch ) {
-		*( pch++ ) = '\0';
 		//
-		// see if there is a mission_level specified
-		pch2 = strstr( pch, " " );
-		if ( pch2 ) { // kill the space if exists
-			*pch2 = '\0';
+		newstr = va( "%s", params );
+		while ( *newstr && *newstr <= ' ' ) {
+			newstr++;
+		}
+		pch = strstr( newstr, " silent" );
+		if ( pch ) {
+			*pch = '\0';
+			silent = qtrue;
 		}
 
-		if ( atoi( pch ) ) { // there's a 'time' specified
-			exitTime = atoi( pch );
+		// make sure we strip any params after the mapname
+		newstr = va( "%s", params );
+		while ( *newstr && *newstr <= ' ' ) {
+			newstr++;
+		}
+
+		if ( !newstr[0] || !Q_stricmp( newstr, "(null)" ) ) {
+			delayedEndgame = qtrue;
+			newstr = "";
+		} else {
+			scan = newstr;
+			while ( *scan && *scan > ' ' ) {
+				scan++;
+			}
+			if ( *scan ) {
+				*scan++ = '\0';
+
+				while ( *scan && *scan <= ' ' ) {
+					scan++;
+				}
+
+				pch2 = scan;
+				while ( *pch2 && *pch2 > ' ' ) {
+					pch2++;
+				}
+				if ( *pch2 ) {
+					*pch2 = '\0';
+				}
+
+				if ( atoi( scan ) ) { // there's a 'time' specified
+					exitTime = atoi( scan );
+				}
+			}
 		}
 	}
 
-	if (!Q_stricmp(newstr, "gamefinished"))
-	{
-		trap_Cvar_Set("g_reloading", va("%d", RELOAD_ENDGAME));
-		level.reloadDelayTime = level.time + 100 + exitTime; // add a delay
+	if ( delayedEndgame ) {
+		// keep old bare-changelevel behavior timing: 1000 + exitTime
+	} else if ( !Q_stricmp( newstr, "gamefinished" ) ) {
+		G_ScheduleEndgame( 100 + exitTime );
 		return qtrue;
 	}
 
-	if ( !endgame ) {
-
-		// check for missing objectives
-		for ( i = 0; i < level.numObjectives; i++ ) {
-			if ( !( player->missionObjectives & ( 1 << i ) ) ) {
-				trap_SendServerCommand( -1, "cp objectivesnotcomplete" );
-				return qtrue;
-			}
-		}
-
-		if ( savepersist ) {
-			G_SavePersistant( newstr ); // save persistent data if required
-
+	// check for missing objectives
+	for ( i = 0; i < level.numObjectives; i++ ) {
+		if ( !( player->missionObjectives & ( 1 << i ) ) ) {
+			trap_SendServerCommand( -1, "cp objectivesnotcomplete" );
+			return qtrue;
 		}
 	}
 
+	if ( savepersist && !delayedEndgame ) {
+		G_SavePersistant( newstr ); // save persistent data if required
+	}
 
-	if ( !silent && !endgame ) {
+	if ( !silent ) {
 		trap_SendServerCommand( -1, "mu_play sound/music/l_complete_1.wav 0\n" );   // play mission success music
 	}
 
@@ -4206,15 +4340,14 @@ qboolean AICast_ScriptAction_ChangeLevel( cast_state_t *cs, char *params ) {
 
 	trap_SendServerCommand( -1, va( "snd_fade 0 %d", 1000 + exitTime ) ); //----(SA)	added
 
+	if ( delayedEndgame ) {
+		G_ScheduleEndgame( 1000 + exitTime );
+		return qtrue;
+	}
+
 	// load the next map, after a delay
 	level.reloadDelayTime = level.time + 1000 + exitTime;
 	trap_Cvar_Set( "g_reloading", va( "%d", RELOAD_NEXTMAP_WAITING ) );
-
-	// Commented this out, moved elsewhere
-	/*if ( endgame ) {
-		//trap_Cvar_Set( "g_reloading", va( "%d", RELOAD_ENDGAME ) );
-		//return qtrue;
-	}*/
 
 	Q_strncpyz( level.nextMap, newstr, sizeof( level.nextMap ) );
 
@@ -4753,12 +4886,28 @@ qboolean AICast_ScriptAction_Cvar( cast_state_t *cs, char *params ) {
 	return qtrue;
 }
 
+/*
+==================
+AICast_ScriptAction_CinPlay
 
+  syntax: cin_play <videoFileName>
+==================
+*/
 qboolean AICast_ScriptAction_CinPlay( cast_state_t *cs, char *params ) {
-    trap_SendServerCommand( cs->entityNum, va( "cin_play %s", params ) );
+	if ( !params || !params[0] ) {
+		G_Error( "AI_Scripting: syntax: cin_play <videoFileName>\n" );
+	}
+	trap_SendServerCommand( cs->entityNum, va( "cin_play %s", params ) );
     return qtrue;
 }
 
+/*
+==================
+AICast_ScriptAction_CinStop
+
+  syntax: cin_stop
+==================
+*/
 qboolean AICast_ScriptAction_CinStop( cast_state_t *cs, char *params ) {
     trap_SendServerCommand( cs->entityNum, "cin_stop" );
     return qtrue;
@@ -4769,7 +4918,6 @@ qboolean AICast_ScriptAction_CinStop( cast_state_t *cs, char *params ) {
 AICast_ScriptAction_decoy
 ==================
 */
-
 qboolean AICast_ScriptAction_decoy( cast_state_t *cs, char *params ) {
     trap_SendServerCommand( -1, "mu_play sound/scenaric/general/decoy.wav 0\n" );
 	return qtrue;

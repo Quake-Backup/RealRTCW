@@ -448,6 +448,11 @@ struct gentity_s {
 	int wave;				   // wave number, survival mode   
 	int lastPainMOD; // last meansOfDeath used in pain function        
 	int oneshot;
+
+	int empDisabledUntil;
+	int empFxUntil;
+	int empAnimState;
+	int empAnimToken; 
 };
 
 // Ridah
@@ -541,6 +546,8 @@ typedef struct {
 	int voteCount;                  // to prevent people from constantly calling votes
 	int teamVoteCount;              // to prevent people from constantly calling votes
 	qboolean teamInfo;              // send team overlay updates?
+
+	int resetStatsConfirmTime;
 } clientPersistant_t;
 
 
@@ -777,6 +784,9 @@ typedef struct {
 	// fretn - maybe not the best place to add this
 	char *maplist[MAX_MAPS];
 
+	qboolean pendingFSGameChange;
+	char nextFSGame[MAX_QPATH];
+
 } level_locals_t;
 
 //extern    qboolean	reloading;				// loading up a savegame
@@ -813,6 +823,9 @@ gentity_t *G_DropSpecifiedItem( gentity_t *ent, gitem_t *item, int lifetimeMs, i
 
 void CrossThink( gentity_t *timer );
 void CrossBurn( gentity_t *owner, gentity_t *targ );
+
+void EMP_Apply(gentity_t *owner, gentity_t *targ, int durationMs);
+void EMP_ClearFxThink(gentity_t *timer) ;
 
 void UseHoldableItem( gentity_t *ent, int item );
 void PrecacheItem( gitem_t *it );
@@ -1024,8 +1037,6 @@ void SendScoreboardMessageToAllClients( void );
 void QDECL G_Printf( const char *fmt, ... ) __attribute__ ((format (printf, 1, 2)));
 void QDECL G_DPrintf( const char *fmt, ... ) __attribute__ ((format (printf, 1, 2)));
 void QDECL G_Error( const char *fmt, ... ) __attribute__ ((noreturn, format (printf, 1, 2)));
-//----(SA)	added
-void G_EndGame( void );
 int G_SendMissionStats( void );   // return '0' if objectives not met, '1' if met
 void G_ChangeLevel( char *mapName );
 //----(SA)	end
@@ -1162,9 +1173,20 @@ extern vmCvar_t g_dlc1;
 extern vmCvar_t g_class;
 extern vmCvar_t g_noobTube;
 extern vmCvar_t g_aiCollision;    
-extern vmCvar_t g_level_was_selected;  
+extern vmCvar_t g_level_was_selected;
+extern vmCvar_t g_survivalDifficulty;
+extern vmCvar_t g_survivalBosses;
 
 extern vmCvar_t g_playerSurvivalClass;
+
+extern vmCvar_t g_ee_skinEliteGuard;
+extern vmCvar_t g_ee_skinMercenary;
+extern vmCvar_t g_ee_skinZombie;
+
+extern vmCvar_t g_ee_earlyWeapons;
+extern vmCvar_t g_ee_endgameSwitch;
+extern vmCvar_t g_ee_progress;
+extern vmCvar_t g_ee_svAgent1;
 
 extern vmCvar_t g_reloading;        //----(SA)	added
 
@@ -1262,9 +1284,6 @@ extern vmCvar_t	g_flushItems;
 extern vmCvar_t g_vanilla_guns;
 extern vmCvar_t g_specialWaves;
 extern vmCvar_t g_survivalAiHealthCap;
-
-// Safe endgame fix
-extern qboolean g_endgameTriggered;
 
 void	trap_Print( const char *text );
 void	trap_Error( const char *text ) __attribute__((noreturn));
@@ -1500,3 +1519,5 @@ typedef enum
 	shard_ceramic,
 	shard_rubble
 } shards_t;
+
+void G_ScheduleEndgame( int delay );

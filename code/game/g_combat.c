@@ -93,31 +93,11 @@ void TossClientWeapons( gentity_t *self )
 		return;
 	}
 
-	if (g_gametype.integer == GT_GOTHIC)
-	{ // Gothicstein. Robots never drop weapons.
 		switch (self->aiCharacter)
 		{
 		case AICHAR_ZOMBIE:
 		case AICHAR_WARZOMBIE:
-		case AICHAR_LOPER:
-		case AICHAR_LOPER_SPECIAL:
-		case AICHAR_PROTOSOLDIER:
-		case AICHAR_SUPERSOLDIER:
-		case AICHAR_SUPERSOLDIER_LAB:
-		case AICHAR_DOG:
-		case AICHAR_PRIEST:
-		case AICHAR_XSHEPHERD:
-			return;
-		default:
-			break;
-		}
-	}
-	else
-	{ // Default case. Robots do drop weapons.
-		switch (self->aiCharacter)
-		{
-		case AICHAR_ZOMBIE:
-		case AICHAR_WARZOMBIE:
+		case AICHAR_FLESH:
 		case AICHAR_LOPER:
 		case AICHAR_LOPER_SPECIAL:
 		case AICHAR_DOG:
@@ -127,7 +107,7 @@ void TossClientWeapons( gentity_t *self )
 		default:
 			break;
 		}
-	}
+	
 
 	AngleVectors(self->r.currentAngles, forward, NULL, NULL);
 
@@ -398,9 +378,19 @@ void player_die_secondchance( gentity_t *self, gentity_t *inflictor, gentity_t *
     pthread_t thread_id;
     pthread_create(&thread_id, NULL, remove_powerup_after_delay2, (void *)self);
 
-	// Remove all current perks from the player
-    memset(self->client->ps.perks, 0, sizeof(self->client->ps.perks));
-	self->client->ps.stats[STAT_PERK] = 0; // Clear all perk bits
+	// Remove perks depending on Second Chance level
+	if (self->client->ps.perks[PERK_SECONDCHANCE] >= 2)
+	{
+		// PRO: consume only Second Chance, keep all other perks
+		self->client->ps.perks[PERK_SECONDCHANCE] = 0;
+		self->client->ps.stats[STAT_PERK] &= ~(1 << PERK_SECONDCHANCE);
+	}
+	else
+	{
+		// BASE: lose everything
+		memset(self->client->ps.perks, 0, sizeof(self->client->ps.perks));
+		self->client->ps.stats[STAT_PERK] = 0;
+	}
 
 	 // Reset the player's state to prevent immediate death again
     self->client->ps.pm_type = PM_NORMAL;
@@ -688,21 +678,26 @@ qboolean IsHeadShotWeapon( int mod, gentity_t *targ, gentity_t *attacker ) {
 	    }
 	}
 
-	switch ( targ->aiCharacter ) {
+	/*switch (targ->aiCharacter)
+	{
 	// get out quick for ai's that don't take headshots
 	case AICHAR_ZOMBIE:
 	case AICHAR_ZOMBIE_SURV:
 	case AICHAR_ZOMBIE_FLAME:
 	case AICHAR_ZOMBIE_GHOST:
 	case AICHAR_WARZOMBIE:
-	case AICHAR_HELGA:     
+	case AICHAR_HELGA:
 	case AICHAR_LOPER:
 	case AICHAR_LOPER_SPECIAL:
-	case AICHAR_VENOM:      
-	return qfalse;
+	case AICHAR_VENOM:
+		if (g_gametype.integer != GT_SURVIVAL)
+		{
+			return qfalse;
+		}
+		break;
 	default:
-	break;
-	}
+		break;
+	}*/
 
 	switch ( mod ) {
 	// players are allowed headshots from these weapons
@@ -1088,6 +1083,12 @@ void G_DamageExt( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 		}
 	}
 
+	if ( client && client->ps.powerups[PW_XSHIELD] ) {
+		G_AddEvent( targ, EV_POWERUP_XSHIELD, 0 );
+		return;
+	}
+
+
 	if ( !dir ) {
 		dflags |= DAMAGE_NO_KNOCKBACK;
 	} else {
@@ -1108,6 +1109,14 @@ void G_DamageExt( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 	if ( dflags & DAMAGE_NO_KNOCKBACK ) {
 		knockback = 0;
 	}
+
+	// cant push big guys. too heavy. Survival only.
+	if (g_gametype.integer == GT_SURVIVAL ) {
+	if (targ->aiCharacter == AICHAR_HEINRICH || targ->aiCharacter == AICHAR_HELGA || targ->aiCharacter == AICHAR_PROTOSOLDIER || targ->aiCharacter == AICHAR_SUPERSOLDIER || targ->aiCharacter == AICHAR_SUPERSOLDIER_LAB)
+	{
+		knockback = 0;
+	}
+    }
 
 	// figure momentum add, even if the damage won't be taken
 	if ( knockback && targ->client ) {

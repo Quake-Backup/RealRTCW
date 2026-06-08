@@ -62,7 +62,7 @@ int weapBanks[MAX_WEAP_BANKS][MAX_WEAPS_IN_BANK] = {
 	{WP_MAUSER, WP_GARAND, WP_MOSIN, WP_DELISLE, 0, 0},														  //	4
 	{WP_G43, WP_M1GARAND, WP_M1941, 0, 0, 0},																  //	5
 	{WP_FG42, WP_MP44, WP_BAR, 0, 0, 0},																	  //	6
-	{WP_M97, WP_AUTO5, 0, 0, 0},																	          //	7
+	{WP_M97, WP_AUTO5, WP_M30, 0, 0},																	          //	7
 	{WP_GRENADE_LAUNCHER, WP_GRENADE_PINEAPPLE, WP_DYNAMITE, WP_AIRSTRIKE, WP_POISONGAS, WP_SMOKE_BOMB, WP_DYNAMITE_ENG }, //	8
 	{WP_PANZERFAUST, WP_FLAMETHROWER, WP_MG42M, WP_BROWNING, 0, 0},											  //	9
 	{WP_VENOM, WP_TESLA, 0, 0, 0, 0}																		  //	10
@@ -1515,24 +1515,40 @@ static qboolean CG_RW_ParseClient( int handle, weaponInfo_t *weaponInfo, int wea
 			weaponInfo->handsModel = trap_R_RegisterModel(filename);
 
 			char base[128], map[128];
+			char smartSkin[128];
 			char handsskin[128], upgradedSkin[128], upgradedMapSkin[128];
 
 			memset(base, 0, sizeof(base));
 			memset(map, 0, sizeof(map));
+			memset(smartSkin, 0, sizeof(smartSkin));
+
 			COM_StripExtension(filename, base, sizeof(base));
 			trap_Cvar_VariableStringBuffer("mapname", map, sizeof(map));
 
-			// Map-specific hands skin
-			Com_sprintf(handsskin, sizeof(handsskin), "%s_%s.skin", base, map);
-			weaponInfo->handsSkin = trap_R_RegisterSkin(handsskin);
+			Com_sprintf(smartSkin, sizeof(smartSkin), "%s.smartskin", base);
 
-			// Generic upgraded skin
-			Com_sprintf(upgradedSkin, sizeof(upgradedSkin), "%s_upgraded.skin", base);
-			weaponInfo->upgradedSkin = trap_R_RegisterSkin(upgradedSkin);
+			weaponInfo->handsSkin = trap_R_RegisterSmartSkin(smartSkin, map, qfalse);
+			weaponInfo->upgradedSkin = trap_R_RegisterSmartSkin(smartSkin, map, qtrue);
+			weaponInfo->upgradedMapSkin = 0;
 
-			// Map-specific upgraded skin
-			Com_sprintf(upgradedMapSkin, sizeof(upgradedMapSkin), "%s_upgraded_%s.skin", base, map);
-			weaponInfo->upgradedMapSkin = trap_R_RegisterSkin(upgradedMapSkin);
+			// Legacy fallback
+			if (!weaponInfo->handsSkin)
+			{
+				Com_sprintf(handsskin, sizeof(handsskin), "%s_%s.skin", base, map);
+				weaponInfo->handsSkin = trap_R_RegisterSkin(handsskin);
+			}
+
+			if (!weaponInfo->upgradedSkin)
+			{
+				Com_sprintf(upgradedMapSkin, sizeof(upgradedMapSkin), "%s_upgraded_%s.skin", base, map);
+				weaponInfo->upgradedSkin = trap_R_RegisterSkin(upgradedMapSkin);
+
+				if (!weaponInfo->upgradedSkin)
+				{
+					Com_sprintf(upgradedSkin, sizeof(upgradedSkin), "%s_upgraded.skin", base);
+					weaponInfo->upgradedSkin = trap_R_RegisterSkin(upgradedSkin);
+				}
+			}
 		} else if ( !Q_stricmp( token.string, "flashDlightColor" ) ) {
 			if ( !PC_Vec_Parse( handle, &weaponInfo->flashDlightColor ) ) {
 				return CG_RW_ParseError( handle, "expected flashDlightColor as r g b" );
@@ -1879,6 +1895,7 @@ void CG_RegisterWeapon( int weaponNum, qboolean force ) {
 	}
 
 }
+
 /*
 =================
 CG_RegisterItemVisuals
@@ -2408,6 +2425,7 @@ qboolean CG_DrawRealWeapons( centity_t *cent ) {
 	case AICHAR_ZOMBIE_GHOST:
 	case AICHAR_HELGA:      //----(SA)	added	// boss1 is now helga-blob
 	case AICHAR_WARZOMBIE:
+	case AICHAR_FLESH:
 	case AICHAR_DOG:
 	case AICHAR_PRIEST:
 	case AICHAR_XSHEPHERD:
@@ -2423,58 +2441,95 @@ qboolean CG_DrawRealWeapons( centity_t *cent ) {
 CG_AddWeaponWithPowerups
 ========================
 */
+/*
+========================
+CG_AddWeaponWithPowerups
+========================
+*/
 static void CG_AddWeaponWithPowerups( refEntity_t *gun, int powerups, playerState_t *ps, centity_t *cent ) {
-    // If ps is NULL, then:
-    // - For the local client, use the predicted player state.
-    // - For other entities (including AI), cast the entity state to a playerState_t.
-    if ( !ps ) {
-        if ( cent->currentState.number == cg.snap->ps.clientNum ) {
-            ps = &cg.predictedPlayerState;
-        } else {
-            ps = (playerState_t *)&cent->currentState;
-        }
-    }
-    
-    // add powerup effects
-    if ( powerups & ( 1 << PW_INVIS ) ) {
-        gun->customShader = cgs.media.invisShader;
-        trap_R_AddRefEntityToScene( gun );
-    } else {
-        trap_R_AddRefEntityToScene( gun );
+	qhandle_t savedCustomShader;
 
-        // blink if time left < 5s, toggling every 200ms for battlesuit
-        if ( powerups & ( 1 << PW_BATTLESUIT_SURV ) ) {
-            int timeLeft = ps->powerups[PW_BATTLESUIT_SURV] - cg.time;
-            if ((timeLeft < 5000) && ((cg.time / 200) % 2)) {
-                // skip rendering to blink
-            } else {
-                gun->customShader = cgs.media.battleWeaponShader;
-                trap_R_AddRefEntityToScene( gun );
-            }
-        }
+	// If ps is NULL, then:
+	// - For the local client, use the predicted player state.
+	// - For other entities (including AI), cast the entity state to a playerState_t.
+	if ( !ps ) {
+		if ( cent->currentState.number == cg.snap->ps.clientNum ) {
+			ps = &cg.predictedPlayerState;
+		} else {
+			ps = (playerState_t *)&cent->currentState;
+		}
+	}
 
-        // blink for quad powerup
-        if ( powerups & ( 1 << PW_QUAD ) ) {
-            int timeLeft = ps->powerups[PW_QUAD] - cg.time;
-            if ((timeLeft < 5000) && ((cg.time / 200) % 2)) {
-                // skip rendering to blink
-            } else {
-                gun->customShader = cgs.media.quadWeaponShader;
-                trap_R_AddRefEntityToScene( gun );
-            }
-        }
+	// IMPORTANT: this function is called for weapon sub-parts (barrels/bolts/hands/etc.)
+	// in RTCW. Those refEntity_t structs are often re-used in a loop, so if we set
+	// customShader and don't restore it, the next part will inherit it and "lose" its base skin.
+	savedCustomShader = gun->customShader;
 
-        // blink for vampire powerup
-        if ( powerups & ( 1 << PW_VAMPIRE ) ) {
-            int timeLeft = ps->powerups[PW_VAMPIRE] - cg.time;
-            if ((timeLeft < 5000) && ((cg.time / 200) % 2)) {
-                // skip rendering to blink
-            } else {
-                gun->customShader = cgs.media.redQuadShader;
-                trap_R_AddRefEntityToScene( gun );
-            }
-        }
-    }
+	// add powerup effects
+	if ( powerups & ( 1 << PW_INVIS ) ) {
+
+		gun->customShader = cgs.media.invisShader;
+		trap_R_AddRefEntityToScene( gun );
+
+		// restore and bail (invis usually replaces base draw)
+		gun->customShader = savedCustomShader;
+
+	} else {
+
+		// always draw base weapon normally (no shader override)
+		gun->customShader = 0;
+		trap_R_AddRefEntityToScene( gun );
+
+		// blink if time left < 5s, toggling every 200ms for battlesuit
+		if ( powerups & ( 1 << PW_BATTLESUIT_SURV ) ) {
+			int timeLeft = ps->powerups[PW_BATTLESUIT_SURV] - cg.time;
+			if ( ( timeLeft < 5000 ) && ( ( cg.time / 200 ) % 2 ) ) {
+				// skip rendering to blink
+			} else {
+				gun->customShader = cgs.media.battleWeaponShader;
+				trap_R_AddRefEntityToScene( gun );
+				gun->customShader = 0;
+			}
+		}
+
+		// blink for quad powerup
+		if ( powerups & ( 1 << PW_QUAD ) ) {
+			int timeLeft = ps->powerups[PW_QUAD] - cg.time;
+			if ( ( timeLeft < 5000 ) && ( ( cg.time / 200 ) % 2 ) ) {
+				// skip rendering to blink
+			} else {
+				gun->customShader = cgs.media.quadWeaponShader;
+				trap_R_AddRefEntityToScene( gun );
+				gun->customShader = 0;
+			}
+		}
+
+		if ( powerups & ( 1 << PW_XSHIELD ) ) {
+			int timeLeft = ps->powerups[PW_XSHIELD] - cg.time;
+			if ( ( timeLeft < 5000 ) && ( ( cg.time / 200 ) % 2 ) ) {
+				// skip rendering to blink
+			} else {
+				gun->customShader = cgs.media.quadWeaponShader;
+				trap_R_AddRefEntityToScene( gun );
+				gun->customShader = 0;
+			}
+		}
+
+		// blink for vampire powerup
+		if ( powerups & ( 1 << PW_VAMPIRE ) ) {
+			int timeLeft = ps->powerups[PW_VAMPIRE] - cg.time;
+			if ( ( timeLeft < 5000 ) && ( ( cg.time / 200 ) % 2 ) ) {
+				// skip rendering to blink
+			} else {
+				gun->customShader = cgs.media.redQuadShader;
+				trap_R_AddRefEntityToScene( gun );
+				gun->customShader = 0;
+			}
+		}
+
+		// restore original state for caller safety
+		gun->customShader = savedCustomShader;
+	}
 }
 
 /*
@@ -3096,11 +3151,11 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 
 
 	if ( isPlayer ) {
-		akimboFire_colt = BG_AkimboFireSequence( weaponNum, cg.predictedPlayerState.ammoclip[WP_AKIMBO], cg.predictedPlayerState.ammoclip[WP_COLT] );
-        akimboFire_tt33 = BG_AkimboFireSequence( weaponNum, cg.predictedPlayerState.ammoclip[WP_DUAL_TT33], cg.predictedPlayerState.ammoclip[WP_TT33] );
+		akimboFire_colt = BG_AkimboFireSequence( weaponNum, cg.predictedPlayerState.ammoclip[WP_AKIMBO] );
+        akimboFire_tt33 = BG_AkimboFireSequence( weaponNum, cg.predictedPlayerState.ammoclip[WP_DUAL_TT33] );
 	} else if ( ps ) {
-		akimboFire_colt = BG_AkimboFireSequence( weaponNum, ps->ammoclip[WP_AKIMBO], ps->ammoclip[WP_AKIMBO] );
-        akimboFire_tt33 = BG_AkimboFireSequence( weaponNum, ps->ammoclip[WP_DUAL_TT33], ps->ammoclip[WP_DUAL_TT33] );
+		akimboFire_colt = BG_AkimboFireSequence( weaponNum, ps->ammoclip[WP_AKIMBO] );
+        akimboFire_tt33 = BG_AkimboFireSequence( weaponNum, ps->ammoclip[WP_DUAL_TT33] );
 	}
 
 	// add the weapon
@@ -3865,6 +3920,7 @@ void CG_DrawWeaponSelect( void ) {
 		case WP_G43:
 		case WP_M1GARAND:
 		case WP_BAR:
+		case WP_M30:
 		case WP_MP44:
 		case WP_MG42M:
 		case WP_M97:
@@ -5223,6 +5279,146 @@ void CG_OutOfAmmoChange( void ) {
 
 }
 
+
+
+void CG_UpdateWeaponWheelSelection( float cursorx, float cursory ) {
+
+	int visibleWeapons[MAX_WEAPONS];
+	int numVisible = CG_CollectWeaponWheelWeapons( visibleWeapons, MAX_WEAPONS );
+
+	if ( numVisible <= 0 ) {
+		cg.weaponWheel.hoveredWeapon = 0;
+		return;
+	}
+
+	if ( numVisible == 1 ) {
+		cg.weaponWheel.hoveredWeapon = visibleWeapons[0];
+		cg.weaponWheel.latchedWeapon = visibleWeapons[0];
+		cg.weaponWheel.lastWeapon = visibleWeapons[0];
+		return;
+	}
+
+	float cx = SCREEN_WIDTH * 0.35f;
+	float cy = SCREEN_HEIGHT * 0.5f;
+
+	float dx, dy;
+	float len;
+
+	qboolean usingStick = qfalse;
+
+	if ( fabsf( cg.weaponWheel.stickX ) > 0.2f || fabsf( cg.weaponWheel.stickY ) > 0.2f ) {
+		usingStick = qtrue;
+	}
+
+	if ( usingStick ) {
+		dx = cg.weaponWheel.stickX;
+		dy = cg.weaponWheel.stickY;
+
+		len = sqrtf( dx * dx + dy * dy );
+
+		if ( len < 0.2f )
+		{
+
+			// Do NOT clear selection if we already latched one
+			if ( cg.weaponWheel.latchedWeapon > 0 )
+			{
+				cg.weaponWheel.hoveredWeapon = cg.weaponWheel.latchedWeapon;
+			}
+			else
+			{
+				cg.weaponWheel.hoveredWeapon = 0;
+			}
+
+			return;
+		}
+
+		dx /= len;
+		dy /= len;
+	} else {
+		dx = cursorx - cx;
+		dy = cursory - cy;
+
+		len = sqrtf( dx * dx + dy * dy );
+
+		if ( len < 30.0f ) {
+			cg.weaponWheel.hoveredWeapon = 0;
+			return;
+		}
+
+		dx /= len;
+		dy /= len;
+	}
+
+	int idx = 0;
+
+	if ( numVisible < 5 ) {
+
+		if ( numVisible == 2 ) {
+			idx = ( dx >= 0.0f ) ? 1 : 0;
+		} else if ( numVisible == 3 ) {
+			if ( dy < -0.45f ) {
+				idx = 0;
+			} else if ( dx >= 0.0f ) {
+				idx = 1;
+			} else {
+				idx = 2;
+			}
+		} else if ( numVisible == 4 ) {
+			if ( fabsf( dx ) > fabsf( dy ) ) {
+				idx = ( dx >= 0.0f ) ? 1 : 3;
+			} else {
+				idx = ( dy >= 0.0f ) ? 2 : 0;
+			}
+		}
+
+	} else {
+
+		float angle = atan2f( dy, dx );
+		angle += M_PI * 0.5f;
+
+		if ( angle < 0 ) {
+			angle += 2.0f * M_PI;
+		}
+		if ( angle >= 2.0f * M_PI ) {
+			angle -= 2.0f * M_PI;
+		}
+
+		float sectorSize = ( 2.0f * M_PI ) / (float)numVisible;
+		float angleOffset = sectorSize * 0.5f;
+
+		idx = (int)( ( angle + angleOffset ) / sectorSize );
+
+		if ( idx >= numVisible ) {
+			idx = 0;
+		}
+	}
+
+	int newWeapon = visibleWeapons[idx];
+
+	if ( usingStick )
+	{
+
+		// if switching too fast between neighbors, resist it
+		if ( cg.weaponWheel.lastWeapon != 0 &&
+			newWeapon != cg.weaponWheel.lastWeapon )
+		{
+
+			float threshold = 0.15f; // tune
+
+			if ( len < ( 0.4f + threshold ) )
+			{
+				newWeapon = cg.weaponWheel.lastWeapon;
+			}
+		}
+
+		cg.weaponWheel.latchedWeapon = newWeapon;
+		cg.weaponWheel.lastWeapon = newWeapon;
+	}
+
+	// Hover is always current frame
+	cg.weaponWheel.hoveredWeapon = newWeapon;
+}
+
 /*
 ===================================================================================================
 
@@ -5403,6 +5599,7 @@ void CG_WeaponFireRecoil( int weapon ) {
 	break;
 	case WP_M97:
 	case WP_AUTO5:
+	case WP_M30:
 		pitchRecoilAdd = 1;
 		pitchAdd = 8 + rand() % 3;
 		yawRandom = 2;
@@ -5899,6 +6096,7 @@ void CG_MissileHitWall( int weapon, int clientNum, vec3_t origin, vec3_t dir, in
 	case WP_G43:
 	case WP_M1GARAND:
 	case WP_BAR:
+	case WP_M30:
 	case WP_MP44:
 	case WP_MG42M:
 	case WP_BROWNING:
@@ -6928,7 +7126,7 @@ static qboolean CG_AA_ValidateTarget( int entNum ) {
         vec3_t target;
 
         VectorCopy( cg_entities[ entNum ].lerpOrigin, target );
-        target[2] += 30.0f; // chest-ish
+        target[2] += 35.0f; // chest-ish
 
         CG_Trace( &los,
                   cg.refdef.vieworg,
@@ -6964,7 +7162,7 @@ void CG_UpdateAimAssist( void ) {
 
 
 	float coneDeg = 4.5f;
-	if (cg.zoomed)
+	if (cg.zoomed || cg.zoomedScope || cg.simpleZoomed)
 	{					
 		coneDeg = 6.0f; 
 	}
@@ -7054,7 +7252,7 @@ void CG_UpdateAimAssist( void ) {
         float  yawErr, pitchErr;
 
         VectorCopy( cg_entities[ bestEnt ].lerpOrigin, target );
-        target[2] += 30.0f; // chest-ish; tune later if you want head
+        target[2] += 35.0f; // chest-ish; tune later if you want head
 
         VectorSubtract( target, cg.refdef.vieworg, to );
         VectorCopy( to, toN );

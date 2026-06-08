@@ -172,6 +172,7 @@ static int weapIconDrawSize( int weap ) {
 	case WP_G43:
 	case WP_M1GARAND:
 	case WP_BAR:
+	case WP_M30:
     case WP_MP44:
 	case WP_MG42M:
 	case WP_M97:
@@ -533,13 +534,6 @@ static void CG_DrawPlayerAmmoValue( rectDef_t *rect, int font, float scale, vec4
 	case WP_SMOKE_BOMB:
 		return;
 
-	case WP_AKIMBO:
-		specialWeap = WP_COLT;
-		break;
-	case WP_DUAL_TT33:
-		specialWeap = WP_TT33;
-		break;
-
 	case WP_GRENADE_LAUNCHER:
 	case WP_KNIFE:
 	case WP_GRENADE_PINEAPPLE:
@@ -890,8 +884,14 @@ static void CG_DrawPerks( rectDef_t *rect, int font, float scale, qboolean draw2
     int i, numPerks = 0;
     gitem_t *item;
     float x, y = 20; // Top part of the screen
+    qhandle_t icon;
 
-    // Count the number of active perks
+	if (cg_gameType.integer != GT_SURVIVAL)
+	{
+		return;
+	}
+
+	// Count the number of active perks
     for ( i = 0; i < MAX_PERKS; i++ ) {
         if ( cg.snap->ps.perks[i] > 0 || (cg.snap->ps.stats[STAT_PERK] & (1 << i)) ) {
             numPerks++;
@@ -911,8 +911,17 @@ static void CG_DrawPerks( rectDef_t *rect, int font, float scale, qboolean draw2
 
             if ( item ) {
                 CG_RegisterItemVisuals( item - bg_itemlist );
-                CG_DrawPic( x, y, rect->w, rect->h, cg_items[item - bg_itemlist].icons[0] );
-                x += rect->w + 5; // 5 is the space between icons
+
+                icon = cg_items[item - bg_itemlist].icons[0];
+
+				// PRO icon replacement
+				if ( cg.snap->ps.perks[i] >= 2 && cgs.media.perkProIcons[i] ) {
+					icon = cgs.media.perkProIcons[i];
+				}
+
+                CG_DrawPic( x, y, rect->w, rect->h, icon );
+
+				x += rect->w + 5; // 5 is the space between icons
             }
         }
     }
@@ -2078,7 +2087,6 @@ static void CG_DrawFatigue( rectDef_t *rect, vec4_t color, int align ) {
 static void CG_DrawWeapRecharge( rectDef_t *rect, vec4_t color, int align ) {
 	float barFrac;
 	float chargeTime;
-	int weap = 0;
 	int flags = 0;
 	//qboolean fade = qfalse;
 	vec4_t bgcolor = {1.0f, 1.0f, 1.0f, 0.25f};
@@ -2088,10 +2096,6 @@ static void CG_DrawWeapRecharge( rectDef_t *rect, vec4_t color, int align ) {
 		flags |= 1;   // BAR_LEFT (left, when vertical means grow 'up')
 	}
 	flags |= 16;
-
-// JPW NERVE -- added drawWeaponPercent in multiplayer
-
-		weap = cg.snap->ps.weapon;
 
 		
 		// Determine charge time based on class
@@ -2380,6 +2384,38 @@ void CG_OwnerDraw( float x, float y, float w, float h, float text_x, float text_
 void CG_MouseEvent( int x, int y ) {
 	int n;
 
+	if ( cg.weaponWheel.active ) {
+
+		// 1. Apply mouse movement
+		cgs.cursorX += x;
+		cgs.cursorY += y;
+
+		// 2. Clamp to screen (virtual 640x480 space)
+		if ( cgs.cursorX < 0 ) cgs.cursorX = 0;
+		if ( cgs.cursorX > 640 ) cgs.cursorX = 640;
+
+		if ( cgs.cursorY < 0 ) cgs.cursorY = 0;
+		if ( cgs.cursorY > 480 ) cgs.cursorY = 480;
+
+		// 3. Clamp to wheel radius (THIS is the important part)
+		float cx = SCREEN_WIDTH * 0.35f;
+		float cy = SCREEN_HEIGHT * 0.5f;
+
+		float dx = cgs.cursorX - cx;
+		float dy = cgs.cursorY - cy;
+
+		float len = sqrtf( dx * dx + dy * dy );
+		float maxRadius = 120.0f;
+
+		if ( len > maxRadius ) {
+			float scale = maxRadius / len;
+			cgs.cursorX = cx + dx * scale;
+			cgs.cursorY = cy + dy * scale;
+		}
+
+		return;
+	}
+
 	if ( ( cg.predictedPlayerState.pm_type == PM_NORMAL || cg.predictedPlayerState.pm_type == PM_SPECTATOR ) && cg.showScores == qfalse ) {
 		trap_Key_SetCatcher( 0 );
 		return;
@@ -2413,6 +2449,28 @@ void CG_MouseEvent( int x, int y ) {
 		Display_MouseMove( NULL, cgs.cursorX, cgs.cursorY );
 	}
 
+}
+
+#define JOY_AXIS_LOOK_X 2
+#define JOY_AXIS_LOOK_Y 3
+
+void CG_JoystickEvent( int axis, int value ) {
+
+    if ( !cg.weaponWheel.active ) {
+        return;
+    }
+
+    float norm = value / 32767.0f;
+
+    // right stick assumed
+	if (axis == JOY_AXIS_LOOK_X)
+	{
+		cg.weaponWheel.stickX = norm;
+	}
+	else if (axis == JOY_AXIS_LOOK_Y)
+	{
+		cg.weaponWheel.stickY = norm;
+	}
 }
 
 /*

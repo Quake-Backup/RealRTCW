@@ -465,7 +465,9 @@ extern cvar_t *j_aimassist_minstrength;
 extern cvar_t *j_aimassist_turnrate;        
 extern cvar_t *j_aimassist_turnrate_ads;
 
-extern cvar_t *j_aimassist_recoil;   
+extern cvar_t *j_aimassist_recoil;  
+
+extern cvar_t *j_invertLook; 
 
 extern cvar_t   *j_uiSpeed;
 extern cvar_t   *j_uiExpo;
@@ -486,6 +488,10 @@ extern	cvar_t	*cl_lanForcePackets;
 extern	cvar_t	*cl_autoRecordDemo;
 
 extern	cvar_t	*cl_consoleKeys;
+
+extern cvar_t  *cl_weaponWheelActive;
+
+extern cvar_t  *cl_useKeyLean;
 
 #ifdef USE_MUMBLE
 extern	cvar_t	*cl_useMumble;

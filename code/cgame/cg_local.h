@@ -79,8 +79,8 @@ If you have questions concerning this license or the applicable additional terms
 #define STAT_MINUS          10  // num frame for '-' stats digit
 
 #define ICON_SIZE           48
-#define CHAR_WIDTH          32
-#define CHAR_HEIGHT         48
+#define CHAR_WIDTH_CG       32
+#define CHAR_HEIGHT_CG      48
 #define TEXT_ICON_SPACE     4
 
 #define TEAMCHAT_WIDTH      80
@@ -437,7 +437,8 @@ typedef enum {
 	LE_ZOMBIE_BAT,
 	LE_MOVING_TRACER,
 	LE_EMITTER,
-	LE_SPIRIT_VIEWFLASH
+	LE_SPIRIT_VIEWFLASH,
+	LE_EMP_WAVE
 } leType_t;
 
 typedef enum {
@@ -788,6 +789,17 @@ typedef struct {
 	vec3_t src;
 } cameraShake_t;
 
+typedef struct {
+    qboolean active;
+    int hoveredBank;
+    int hoveredWeapon;
+	float stickX;
+	float stickY;
+	int latchedWeapon;
+	int lastWeapon;
+    int openTime;
+} weaponWheel_t;
+
 //======================================================================
 
 // all cg.stepTime, cg.duckTime, cg.landTime, etc are set to cg.time when the action
@@ -1108,6 +1120,8 @@ typedef struct {
 
 	float aaStrengthSmoothed;
 
+	weaponWheel_t weaponWheel;
+
 } cg_t;
 
 #define NUM_FUNNEL_SPRITES  21
@@ -1289,6 +1303,9 @@ typedef struct {
 	qhandle_t battleSuitShader;
 	qhandle_t battleWeaponShader;
 	qhandle_t hastePuffShader;
+
+	qhandle_t empRingShader;
+    qhandle_t empSparkShader;
 
 	// weapon effect models
 	qhandle_t spearModel;   //----(SA)
@@ -1484,6 +1501,8 @@ typedef struct {
 	sfxHandle_t adrenalineSound;   //----(SA)	added
 	sfxHandle_t bandagesSound;
 	sfxHandle_t crossSound;
+	sfxHandle_t empSound;
+	sfxHandle_t shieldSound;
 	sfxHandle_t elecSound;
 	sfxHandle_t fireSound;
 	sfxHandle_t waterSound;
@@ -1583,6 +1602,10 @@ typedef struct {
 	sfxHandle_t poisonGasCough;
 	sfxHandle_t knifeThrow;
 	sfxHandle_t nullSound;
+	
+	sfxHandle_t xshieldLoopSound;
+
+	qhandle_t perkProIcons[MAX_PERKS];
 
 } cgMedia_t;
 
@@ -1736,6 +1759,8 @@ typedef struct {
 	animScriptData_t animScriptData;
 
 } cgs_t;
+
+
 
 //==============================================================================
 
@@ -1996,6 +2021,7 @@ int CG_LastAttacker( void );
 void CG_LoadMenus( const char *menuFile );
 void CG_KeyEvent( int key, qboolean down );
 void CG_MouseEvent( int x, int y );
+void CG_JoystickEvent( int axis, int value );
 void CG_EventHandling( int type );
 
 qboolean CG_GetTag( int clientNum, char *tagname, orientation_t * or );
@@ -2095,6 +2121,8 @@ void CG_ObjectivePrint( const char *str, int charWidth, int team );     // NERVE
 void CG_DrawHead( float x, float y, float w, float h, int clientNum, vec3_t headAngles );
 void CG_DrawActive( stereoFrame_t stereoView );
 void CG_DrawFlagModel( float x, float y, float w, float h, int team );
+
+void CG_DrawWeaponWheel( void ) ;
 
 void CG_DrawTeamBackground( int x, int y, int w, int h, float alpha, int team );
 void CG_OwnerDraw( float x, float y, float w, float h, float text_x, float text_y, int ownerDraw, int ownerDrawFlags, int align, float special, int font, float scale, vec4_t color, qhandle_t shader, int textStyle );
@@ -2196,6 +2224,8 @@ void CG_WeaponBank_f( void );
 void CG_WeaponSuggest( int weap );
 void CG_ResetSimpleZoom(void);
 
+extern int weapBanks[MAX_WEAP_BANKS][MAX_WEAPS_IN_BANK];
+
 void CG_FinishWeaponChange( int lastweap, int newweap );
 
 void CG_RegisterWeapon( int weaponNum, qboolean force );
@@ -2237,6 +2267,10 @@ void CG_DrawHoldableSelect( void );
 
 void CG_OutOfAmmoChange( void );
 void CG_HoldableUsedupChange( void ); //----(SA)	added
+
+void CG_UpdateWeaponWheelSelection( float cursorx, float cursory );
+
+int CG_CollectWeaponWheelWeapons( int *visibleWeapons, int maxWeapons );
 
 //----(SA) added to header to access from outside cg_weapons.c
 void CG_AddDebris( vec3_t origin, vec3_t dir, int speed, int duration, int count );
@@ -2283,6 +2317,9 @@ void CG_ParticleExplosion( char *animStr, vec3_t origin, vec3_t vel, int duratio
 // Rafael snow pvs check
 void    CG_SnowLink( centity_t *cent, qboolean particleOn );
 // done.
+
+
+void CG_SpawnEMPWave( centity_t *cent ) ;
 
 // Rafael bats
 void CG_ParticleBat( centity_t *cent );
@@ -2687,3 +2724,5 @@ qboolean    trap_GetModelInfo( int clientNum, char *modelName, animModelInfo_t *
 
 // New in IORTCW
 void		*trap_Alloc( int size );
+
+qhandle_t   trap_R_RegisterSmartSkin( const char *name, const char *mapName, qboolean upgraded );

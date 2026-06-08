@@ -139,6 +139,8 @@ cvar_t *j_uiSpeed;
 cvar_t *j_uiExpo;
 cvar_t *j_uiDeadzone;
 
+cvar_t *j_invertLook;
+
 cvar_t  *cl_activeAction;
 
 cvar_t  *cl_motdString;
@@ -160,6 +162,8 @@ cvar_t	*cl_lanForcePackets;
 cvar_t	*cl_guidServerUniq;
 
 cvar_t	*cl_consoleKeys;
+cvar_t  *cl_weaponWheelActive;
+cvar_t  *cl_useKeyLean;
 
 cvar_t	*cl_rate;
 
@@ -3408,7 +3412,7 @@ void CL_InitRef( void ) {
 		Com_Error(ERR_FATAL, "Failed to load renderer");
 	}
 
-	GetRefAPI = Sys_LoadFunction(rendererLib, "GetRefAPI");
+	GetRefAPI = (GetRefAPI_t) Sys_LoadFunction(rendererLib, "GetRefAPI");
 	if(!GetRefAPI)
 	{
 		Com_Error(ERR_FATAL, "Can't load symbol GetRefAPI: '%s'",  Sys_LibraryError());
@@ -3777,6 +3781,8 @@ void CL_Init( void ) {
 	j_uiExpo =	    Cvar_Get ("j_uiExpo",      "1.6", CVAR_ARCHIVE);
 	j_uiDeadzone =	Cvar_Get ("j_uiDeadzone",   "0.18", CVAR_ARCHIVE);
 
+	j_invertLook = Cvar_Get( "j_invertLook", "0", CVAR_ARCHIVE );
+
 	j_lookSens = Cvar_Get ("j_lookSens", "1.0", CVAR_ARCHIVE);
 	j_moveSens = Cvar_Get ("j_moveSens", "1.0", CVAR_ARCHIVE);
 
@@ -3814,6 +3820,10 @@ void CL_Init( void ) {
 
 	// ~ and `, as keys and characters
 	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE);
+
+	cl_weaponWheelActive = Cvar_Get( "cg_weaponWheelActive", "0", 0 );
+
+	cl_useKeyLean = Cvar_Get( "cl_useKeyLean", "1", CVAR_ARCHIVE );
 
 	// userinfo
 	Cvar_Get( "name", "WolfPlayer", CVAR_USERINFO | CVAR_ARCHIVE );

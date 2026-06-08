@@ -94,6 +94,7 @@ void CG_CheckAmmo( void ) {
 		case WP_G43:
 	    case WP_M1GARAND:
 		case WP_BAR:
+		case WP_M30:
 		case WP_MP44:
 		case WP_MG42M:
 		case WP_M97:
@@ -283,6 +284,8 @@ void CG_Respawn( void ) {
 	cg.zoomedBinoc = cg.zoomedScope = qfalse;
 	cg.zoomTime = 0;
 	cg.zoomval = 0;
+	cg.simpleZoomed = 0;
+	cg.simpleZoomTime = 0;
 
 	// reset fog to world fog (if present)
 //	trap_R_SetFog(FOG_CMD_SWITCHFOG, FOG_MAP,20,0,0,0,0);

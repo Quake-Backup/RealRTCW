@@ -60,11 +60,11 @@ If you have questions concerning this license or the applicable additional terms
   #define CLIENT_WINDOW_TITLE     	"RealRTCW"
   #define CLIENT_WINDOW_MIN_TITLE 	"RealRTCW" //iowolfsp
 #ifdef USE_XDG
-  #define HOMEPATH_NAME_UNIX		"RealRTCW\\5.1"
+  #define HOMEPATH_NAME_UNIX		"RealRTCW"
 #else
   #define HOMEPATH_NAME_UNIX		".realrtcw"
 #endif
-  #define HOMEPATH_NAME_WIN		"RealRTCW\\5.1"
+  #define HOMEPATH_NAME_WIN		"RealRTCW"
   #define STEAMPATH_NAME		"Return To Castle Wolfenstein"
   #define STEAMPATH_APPID		"9010"
 
@@ -89,7 +89,7 @@ If you have questions concerning this license or the applicable additional terms
 #define LEGACY_HEARTBEAT_FOR_MASTER	"Wolfenstein-1"
 
 #ifndef PRODUCT_VERSION
-  #define PRODUCT_VERSION "5.3" // iortcw 1.51
+  #define PRODUCT_VERSION "5.4" // iortcw 1.51
 #endif
 
 #ifndef PRODUCT_DATE
@@ -1010,11 +1010,12 @@ SAVE
 	16 - (SA) added fog
 	17 - (SA) rats, changed fog.
 	18 - TTimo targetdeath fix
+	19 - RealRTCW Save
 
 ==============================================================
 */
 
-#define SAVE_VERSION    18
+#define SAVE_VERSION    19
 #define SAVE_INFOSTRING_LENGTH  256
 
 
@@ -1346,7 +1347,7 @@ typedef struct accumPrintLabel_s {
 #define MAX_WEAPONS             64  // (SA) and yet more!
 #define MAX_WEAPON_SLOTS         3 
 #define MAX_WEAPON_SLOTS_SOLDIER 4
-#define MAX_HOLDABLE            16
+#define MAX_HOLDABLE            32
 #define MAX_PERKS 			    16
 
 // Ridah, increased this
