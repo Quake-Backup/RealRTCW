@@ -505,6 +505,12 @@ ifeq ($(PLATFORM),darwin)
   RENDERER_LIBS=
   OPTIMIZEVM = -O3
 
+  # FFmpeg (Homebrew) for cinematic playback in cl_cin.c
+  FFMPEG_CFLAGS := $(shell PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig pkg-config --cflags libavcodec libavformat libavutil libswscale libswresample)
+  FFMPEG_LIBS   := $(shell PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig pkg-config --libs   libavcodec libavformat libavutil libswscale libswresample)
+  CFLAGS  += $(FFMPEG_CFLAGS)
+  CLIENT_LIBS += $(FFMPEG_LIBS)
+
   # Default minimum Mac OS X version
   ifeq ($(MACOSX_VERSION_MIN),)
     MACOSX_VERSION_MIN=10.5

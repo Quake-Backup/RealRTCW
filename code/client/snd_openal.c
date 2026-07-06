@@ -1722,7 +1722,7 @@ static void S_AL_MainStartSound( vec3_t origin, int entnum, int entchannel, sfxH
   srcHandle_t src;
   src_t *curSource;
 
-  if ( entnum >= 0 && entnum < MAX_GENTITIES ) 
+  if ( entnum >= 0 && entnum < MAX_CLIENTS ) 
   {
     s_entityTalkAmplitude[entnum] = 0;
   }
@@ -1772,7 +1772,7 @@ static void S_AL_MainStartSound( vec3_t origin, int entnum, int entchannel, sfxH
 
   curSource = &srcList[src];
 
-  if ( (entnum < MAX_CLIENTS) && (entchannel == CHAN_VOICE) )
+  if ( (entnum >= 0 && entnum < MAX_CLIENTS) && (entchannel == CHAN_VOICE) )
   {
     if(offset_ext && knownSfx[sfx].voice){
       s_entityTalkAmplitude[entnum] = S_AL_VoiceAmplitude(sfx, VOICE_AHEAD);
@@ -2189,11 +2189,16 @@ void S_AL_SrcUpdate( void )
     // See if it needs to be moved
     if(curSource->isTracking && !state)
     {
-      qalSourcefv(curSource->alSource, AL_POSITION, entityList[entityNum].origin);
-      S_AL_ScaleGain(curSource, entityList[entityNum].origin);
+      // Guard against a stale/invalid entity index (can happen during
+      // scripted scenes) which would dereference a wild pointer.
+      if(entityNum >= 0 && entityNum < MAX_GENTITIES)
+      {
+        qalSourcefv(curSource->alSource, AL_POSITION, entityList[entityNum].origin);
+        S_AL_ScaleGain(curSource, entityList[entityNum].origin);
+      }
     }
 
-    if ( ( entityNum < MAX_CLIENTS) && (entityChannel == CHAN_VOICE ))
+    if ( ( entityNum >= 0 && entityNum < MAX_CLIENTS) && (entityChannel == CHAN_VOICE ))
     {
       if(offset_ext && knownSfx[curSource->sfx].voice ){
         qalGetSourcef(curSource->alSource,AL_SEC_OFFSET,&offset);
