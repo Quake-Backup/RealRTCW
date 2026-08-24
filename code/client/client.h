@@ -110,6 +110,8 @@ typedef struct {
 #define  MAX_PARSE_ENTITIES  ( PACKET_BACKUP * MAX_SNAPSHOT_ENTITIES )
 
 extern int g_console_field_width;
+extern int g_smallchar_width;
+extern int g_smallchar_height;
 
 typedef struct {
 	int timeoutcount;               // it requres several frames in a timeout condition
@@ -125,6 +127,9 @@ typedef struct {
 	qboolean extrapolatedSnapshot;      // set if any cgame frame has been forced to extrapolate
 	// cleared when CL_AdjustTimeDelta looks at it
 	qboolean newSnapshots;          // set on parse of any valid packet
+
+	float timeDilation;             // world time dilation factor from CS_TIMEDILATION, 1.0 = normal speed
+	float timeDilationCarry;        // fractional-ms carry for the per-frame serverTimeDelta bleed, avoids truncation drift
 
 	gameState_t gameState;          // configstrings
 	char mapname[MAX_QPATH];        // extracted from CS_SERVERINFO

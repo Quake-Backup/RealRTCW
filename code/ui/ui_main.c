@@ -39,6 +39,7 @@ If you have questions concerning this license or the applicable additional terms
 */
 
 #include "ui_local.h"
+#include "../steam/steam.h"
 
 uiInfo_t uiInfo;
 
@@ -1208,21 +1209,21 @@ UI_LoadbonusStrings
 ==============
 */
 #define MAX_BUFFER_BONUS          20000
-static void UI_LoadbonusStrings( void ) {
+// key/value format, matched by name instead of position, so multiple files can extend the table
+static void UI_ParseBonusStringsFile( const char *filename ) {
 	char buffer[MAX_BUFFER_BONUS];
 	char *text;
-	char filename[MAX_QPATH];
 	fileHandle_t f;
 	int len, i, numStrings;
-	char *token;
+	char *token, *value;
+	char key[MAX_QPATH]; // COM_ParseExt reuses one buffer, so copy the key out before parsing the value
 
-	Com_sprintf( filename, MAX_QPATH, "text/bonus_strings.txt" );
 	len = trap_FS_FOpenFile( filename, &f, FS_READ );
 	if ( len <= 0 ) {
 		return;
 	}
 	if ( len > MAX_BUFFER_BONUS ) {
-//		CG_Error( "%s is too big, make it smaller (max = %i bytes)\n", filename, MAX_BUFFER );
+		return;
 	}
 
 	// load the file into memory
@@ -1232,19 +1233,64 @@ static void UI_LoadbonusStrings( void ) {
 	// parse the list
 	text = buffer;
 
+	token = COM_ParseExt( &text, qtrue );
+	if ( token[0] != '{' ) {
+		return;
+	}
+
 	numStrings = sizeof( bonusStrings ) / sizeof( bonusStrings[0] ) - 1;
 
-	for ( i = 0; i < numStrings; i++ ) {
+	while ( 1 ) {
 		token = COM_ParseExt( &text, qtrue );
 		if ( !token[0] ) {
 			break;
 		}
+		if ( token[0] == '}' ) {
+			break;
+		}
+		Q_strncpyz( key, token, sizeof( key ) );
+
+		// existing entry by key, or first free slot
+		for ( i = 0; i < numStrings; i++ ) {
+			if ( !bonusStrings[i].name || !strlen( bonusStrings[i].name ) || !strcmp( bonusStrings[i].name, key ) ) {
+				break;
+			}
+		}
+
+		value = COM_ParseExt( &text, qfalse );
+
+		if ( i >= numStrings ) {
+			continue;
+		}
+
+		if ( !bonusStrings[i].name || !strlen( bonusStrings[i].name ) ) {
 #ifdef Q3_VM // new IORTCW syscall (works for qvms and dlls), but have dlls use vanilla rtcw compatible code
-		bonusStrings[i].localname = (char *)trap_Alloc( strlen( token ) + 1 );
+			bonusStrings[i].name = (char *)trap_Alloc( strlen( key ) + 1 );
 #else
-		bonusStrings[i].localname = (char *)malloc( strlen( token ) + 1 );
+			bonusStrings[i].name = (char *)malloc( strlen( key ) + 1 );
 #endif
-		strcpy( bonusStrings[i].localname, token );
+			strcpy( bonusStrings[i].name, key );
+		}
+
+#ifdef Q3_VM
+		bonusStrings[i].localname = (char *)trap_Alloc( strlen( value ) + 1 );
+#else
+		bonusStrings[i].localname = (char *)malloc( strlen( value ) + 1 );
+#endif
+		strcpy( bonusStrings[i].localname, value );
+	}
+}
+
+// also loads bonus_strings_1.txt.._9.txt, so custom campaigns can add keys without editing the base file
+static void UI_LoadbonusStrings( void ) {
+	char filename[MAX_QPATH];
+	int i;
+
+	UI_ParseBonusStringsFile( "text/bonus_strings.txt" );
+
+	for ( i = 1; i < 10; i++ ) {
+		Com_sprintf( filename, sizeof( filename ), "text/bonus_strings_%d.txt", i );
+		UI_ParseBonusStringsFile( filename );
 	}
 }
 
@@ -1829,7 +1875,7 @@ static void UI_DrawMapPreview( rectDef_t *rect, float scale, vec4_t color, qbool
 
 static void UI_DrawMapTimeToBeat( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
 	int minutes, seconds, time;
-	if ( ui_currentMap.integer < 0 || ui_currentMap.integer > uiInfo.mapCount ) {
+	if ( ui_currentMap.integer < 0 || ui_currentMap.integer >= uiInfo.mapCount ) {
 		ui_currentMap.integer = 0;
 		trap_Cvar_Set( "ui_currentMap", "0" );
 	}
@@ -1994,7 +2040,8 @@ static void UI_DrawNetMapPreview( rectDef_t *rect, float scale, vec4_t color ) {
 
 static void UI_DrawSmallCreateMapPreview( rectDef_t *rect, float scale, vec4_t color, int number ) {
 
-	if ( uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) {
+	if ( ui_currentNetMap.integer >= 0 && ui_currentNetMap.integer < uiInfo.mapCount &&
+		 uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) {
 		UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, trap_R_RegisterShaderNoMip( va( "levelshots/ui_%s_s%d", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName, number ) ) );
 	} else {
 		UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, trap_R_RegisterShaderNoMip( "menu/art/unknownmap" ) );
@@ -2003,7 +2050,8 @@ static void UI_DrawSmallCreateMapPreview( rectDef_t *rect, float scale, vec4_t c
 
 static void UI_DrawCreateMapPreview( rectDef_t *rect, float scale, vec4_t color ) {
 
-	if ( uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) {
+	if ( ui_currentNetMap.integer >= 0 && ui_currentNetMap.integer < uiInfo.mapCount &&
+		 uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) {
 		UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, trap_R_RegisterShaderNoMip( va( "levelshots/ui_%s", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) ) );
 	} else {
 		UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, trap_R_RegisterShaderNoMip( "menu/art/unknownmap" ) );
@@ -2011,7 +2059,7 @@ static void UI_DrawCreateMapPreview( rectDef_t *rect, float scale, vec4_t color 
 }
 
 static void UI_DrawNetMapCinematic( rectDef_t *rect, float scale, vec4_t color ) {
-	if ( ui_currentNetMap.integer < 0 || ui_currentNetMap.integer > uiInfo.mapCount ) {
+	if ( ui_currentNetMap.integer < 0 || ui_currentNetMap.integer >= uiInfo.mapCount ) {
 		ui_currentNetMap.integer = 0;
 		trap_Cvar_Set( "ui_currentNetMap", "0" );
 	}
@@ -4709,10 +4757,12 @@ static void UI_RunMenuScript( char **args ) {
 			UI_GameType_HandleKey( 0, NULL, K_MOUSE1, qfalse );
 			UI_GameType_HandleKey( 0, NULL, K_MOUSE2, qfalse );
 		} else if ( Q_stricmp( name, "StartSurvival" ) == 0 ) {
-			trap_Cvar_Set( "cg_thirdPerson", "0" );
-			trap_Cvar_Set( "cg_cameraOrbit", "0" );
-			trap_Cvar_SetValue( "g_gametype", 3 );
-			trap_Cmd_ExecuteText( EXEC_APPEND, va( "wait ; wait ; map %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) );
+			if ( ui_currentNetMap.integer >= 0 && ui_currentNetMap.integer < uiInfo.mapCount ) {
+				trap_Cvar_Set( "cg_thirdPerson", "0" );
+				trap_Cvar_Set( "cg_cameraOrbit", "0" );
+				trap_Cvar_SetValue( "g_gametype", 3 );
+				trap_Cmd_ExecuteText( EXEC_APPEND, va( "wait ; wait ; map %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) );
+			}
 
 		} else if (Q_stricmp( name, "validate_openURL" ) == 0 ) 
 		{
@@ -4747,6 +4797,8 @@ static void UI_RunMenuScript( char **args ) {
 			trap_Cvar_Set( "com_recommendedSet", "1" );                   // NERVE - SMF
 			trap_Cmd_ExecuteText( EXEC_APPEND, "vid_restart\n" );
 // end from MP
+		} else if ( Q_stricmp( name, "ResetSteamStats" ) == 0 ) {
+			steamResetStats( 1 );
 		} else if ( Q_stricmp( name, "getCDKey" ) == 0 ) {
 			char out[17];
 			trap_GetCDKey( buff, 17 );
@@ -4779,9 +4831,68 @@ static void UI_RunMenuScript( char **args ) {
 				trap_Cvar_Set( "ui_cdkeyvalid", "CD Key does not appear to be valid." );
 			}
 		} else if ( Q_stricmp( name, "loadArenas" ) == 0 ) {
+			// force back to the survival game type in case campaign_menu left it on single player
+			ui_netGameType.integer = 3;
+			trap_Cvar_SetValue( "ui_netGameType", 3 );
 			UI_LoadArenasIntoMapList();
 			UI_MapCountByGameType( qfalse );
 			Menu_SetFeederSelection( NULL, FEEDER_ALLMAPS, 0, "survival_menu" );
+		} else if ( Q_stricmp( name, "loadCampaignArenas" ) == 0 ) {
+			// force to the single player game type so campaign maps show up in FEEDER_ALLMAPS
+			ui_netGameType.integer = 1;
+			trap_Cvar_SetValue( "ui_netGameType", 1 );
+			UI_LoadArenasIntoMapList();
+			UI_MapCountByGameType( qfalse );
+			Menu_SetFeederSelection( NULL, FEEDER_ALLMAPS, 0, "campaign_menu" );
+		} else if ( Q_stricmp( name, "StartCampaign" ) == 0 ) {
+			trap_Cvar_Set( "cg_thirdPerson", "0" );
+			trap_Cvar_Set( "cg_cameraOrbit", "0" );
+			switch ( ui_camp_bonusmode.integer ) {
+			case 1: // Walk in the Park
+				trap_Cvar_Set( "g_gameskill", "4" );
+				trap_Cvar_Set( "g_nohudchallenge", "1" );
+				trap_Cvar_Set( "g_ironchallenge", "0" );
+				trap_Cvar_Set( "g_nopickupchallenge", "0" );
+				trap_Cvar_Set( "g_decaychallenge", "0" );
+				break;
+			case 2: // Ironman
+				trap_Cvar_Set( "g_gameskill", "3" );
+				trap_Cvar_Set( "g_nohudchallenge", "0" );
+				trap_Cvar_Set( "g_ironchallenge", "1" );
+				trap_Cvar_Set( "g_nopickupchallenge", "0" );
+				trap_Cvar_Set( "g_decaychallenge", "0" );
+				break;
+			case 3: // Hardcore
+				trap_Cvar_Set( "g_gameskill", "3" );
+				trap_Cvar_Set( "g_nohudchallenge", "0" );
+				trap_Cvar_Set( "g_ironchallenge", "0" );
+				trap_Cvar_Set( "g_nopickupchallenge", "1" );
+				trap_Cvar_Set( "g_decaychallenge", "0" );
+				break;
+			case 4: // 999 Mode
+				trap_Cvar_Set( "g_gameskill", "3" );
+				trap_Cvar_Set( "g_nohudchallenge", "0" );
+				trap_Cvar_Set( "g_ironchallenge", "0" );
+				trap_Cvar_Set( "g_nopickupchallenge", "0" );
+				trap_Cvar_Set( "g_decaychallenge", "1" );
+				break;
+			case 5: // Nightmare
+				trap_Cvar_Set( "g_gameskill", "3" );
+				trap_Cvar_Set( "g_nohudchallenge", "1" );
+				trap_Cvar_Set( "g_ironchallenge", "1" );
+				trap_Cvar_Set( "g_nopickupchallenge", "1" );
+				trap_Cvar_Set( "g_decaychallenge", "0" );
+				break;
+			default: // None - use the Gameskill selection as-is, clear any leftover challenge flags
+				trap_Cvar_Set( "g_nohudchallenge", "0" );
+				trap_Cvar_Set( "g_ironchallenge", "0" );
+				trap_Cvar_Set( "g_nopickupchallenge", "0" );
+				trap_Cvar_Set( "g_decaychallenge", "0" );
+				break;
+			}
+			if ( ui_currentNetMap.integer >= 0 && ui_currentNetMap.integer < uiInfo.mapCount ) {
+				trap_Cmd_ExecuteText( EXEC_APPEND, va( "wait ; wait ; spmap %s\n", uiInfo.mapList[ui_currentNetMap.integer].mapLoadName ) );
+			}
 		} else if ( Q_stricmp( name, "saveControls" ) == 0 ) {
 			Controls_SetConfig( qtrue );
 		} else if ( Q_stricmp( name, "loadControls" ) == 0 ) {
@@ -5323,6 +5434,8 @@ static int UI_MapCountByGameType( qboolean singlePlayer ) {
 	c = 0;
 	game = singlePlayer ? uiInfo.gameTypes[ui_gameType.integer].gtEnum : uiInfo.gameTypes[ui_netGameType.integer].gtEnum;
 	static int s_lastEnemiesFilter = -1;
+	static int s_lastChapterFilter = -1;
+	static int s_lastMidgameFilter = -1;
 
 	/*
 	if ( game == GT_SINGLE_PLAYER ) {
@@ -5330,9 +5443,17 @@ static int UI_MapCountByGameType( qboolean singlePlayer ) {
 	}
 	*/
 
-	if ( ui_sv_enemies.integer != s_lastEnemiesFilter ) {
+	if ( ui_sv_enemies.integer != s_lastEnemiesFilter ||
+		 ui_camp_chapter.integer != s_lastChapterFilter ||
+		 ui_midgame.integer != s_lastMidgameFilter ) {
         s_lastEnemiesFilter = ui_sv_enemies.integer;
+        s_lastChapterFilter = ui_camp_chapter.integer;
+        s_lastMidgameFilter = ui_midgame.integer;
         UI_LoadArenasIntoMapList();
+
+        trap_Cvar_SetValue( "ui_currentNetMap", 0 );
+        ui_currentNetMap.integer = 0;
+        Menu_SetFeederSelection( NULL, FEEDER_ALLMAPS, 0, NULL );
     }
 
 	for ( i = 0; i < uiInfo.mapCount; i++ ) {
@@ -6924,6 +7045,8 @@ void _UI_Init( qboolean inGameLoad ) {
 
 	//uiInfo.inGameLoad = inGameLoad;
 
+	steamInit();
+
 	UI_RegisterCvars();
 	UI_InitMemory();
 
@@ -7044,6 +7167,7 @@ void _UI_Init( qboolean inGameLoad ) {
 //	UI_LoadTeams();
 	UI_ParseGameInfo("gameinfo.txt");
 	UI_LoadArenas();
+	UI_ResolveArenaLongnames();
 
 	menuSet = UI_Cvar_VariableString( "ui_menuFiles" );
 	if ( menuSet == NULL || menuSet[0] == '\0' ) {
@@ -7712,6 +7836,9 @@ vmCvar_t ui_limboMode;
 
 vmCvar_t  cg_autoReload;
 vmCvar_t  ui_sv_enemies;
+vmCvar_t  ui_camp_chapter;
+vmCvar_t  ui_camp_bonusmode;
+vmCvar_t  ui_midgame;
 // -NERVE - SMF
 
 cvarTable_t cvarTable[] = {
@@ -7830,6 +7957,9 @@ cvarTable_t cvarTable[] = {
 	{ NULL, "g_localTeamPref", "", 0 },
 
 	{ &ui_sv_enemies, "ui_sv_enemies", "0", CVAR_ARCHIVE },
+	{ &ui_camp_chapter, "ui_camp_chapter", "0", CVAR_ARCHIVE },
+	{ &ui_camp_bonusmode, "ui_camp_bonusmode", "0", CVAR_ARCHIVE },
+	{ &ui_midgame, "g_midgame", "0", CVAR_ARCHIVE | CVAR_LATCH },
 };
 
 static int		cvarTableSize = ARRAY_LEN( cvarTable );
