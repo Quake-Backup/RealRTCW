@@ -1,15 +1,50 @@
-// Weapon roster for this armory - weapon_knife is a baseline grant, not listed here (see g_armory.c)
+// Weapon roster for this armory
 
+weapon weapon_grenadepineapple recommended
+
+weapon weapon_silencer
+weapon weapon_luger
 weapon weapon_colt
-weapon weapon_fg42
-weapon weapon_snooperrifle
-weapon weapon_thompson
+weapon weapon_akimbo recommended
+
+weapon weapon_mp40
+weapon weapon_thompson 
+weapon weapon_sten
+
+weapon weapon_mauserrifle
 weapon weapon_sniperscope
-weapon weapon_m97
-weapon weapon_m1garand
-weapon weapon_grenadesmoke
-weapon weapon_bar
+weapon weapon_snooperrifle
+
+weapon weapon_fg42 recommended
+
+#if g_fullarsenal == 1
+weapon weapon_m97 recommended
+weapon weapon_g43
+weapon weapon_m1garand 
+weapon weapon_bar recommended
+weapon weapon_mp34
+weapon weapon_hdm
+weapon weapon_revolver
+#endif
+#if g_fullarsenal == 2
+weapon weapon_m97 recommended
+#endif
 
 #if g_dlc1 == 1
+#if g_fullarsenal == 1
+weapon weapon_delisle
 weapon weapon_auto5
+weapon weapon_m1941
+weapon weapon_m1941scope
 #endif
+#endif
+
+equip heavyarmor recommended
+equip fullammobag recommended
+equip tacticalgloves
+equip lightweight
+equip grenades
+equip camosuit
+equip gasgrenade
+equip smokegrenade
+equip airstrikesignal recommended

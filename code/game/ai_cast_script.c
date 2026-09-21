@@ -85,6 +85,8 @@ qboolean AICast_ScriptAction_DropItem( cast_state_t *cs, char *params ) ;
 qboolean AICast_ScriptAction_GiveInventory( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_GivePerk( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_TakeWeapon( cast_state_t *cs, char *params );
+qboolean AICast_ScriptAction_SuspendWeapons( cast_state_t *cs, char *params );
+qboolean AICast_ScriptAction_RestoreWeapons( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_NoRespawn( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_RandomRespawn( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_Movetype( cast_state_t *cs, char *params );
@@ -171,6 +173,7 @@ qboolean AICast_ScriptAction_DefendStop( cast_state_t *cs, char *params ) ;
 
 qboolean AICast_ScriptAction_ApplyLoadout( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_OpenLoadoutMenu( cast_state_t *cs, char *params );
+qboolean AICast_ScriptAction_OpenCardGameMenu( cast_state_t *cs, char *params );
 
 
 // Achievement condition functions
@@ -390,6 +393,8 @@ cast_script_stack_action_t scriptActions[] =
 		{"giveweapon", AICast_ScriptAction_GiveWeapon, NULL},
 		{"giveweaponfull", AICast_ScriptAction_GiveWeaponFull, NULL},
 		{"takeweapon", AICast_ScriptAction_TakeWeapon, NULL},
+		{"suspendweapons", AICast_ScriptAction_SuspendWeapons, NULL},
+		{"restoreweapons", AICast_ScriptAction_RestoreWeapons, NULL},
 		{"norespawn", AICast_ScriptAction_NoRespawn, NULL},
 		{"randomrespawn", AICast_ScriptAction_RandomRespawn, NULL},
 		{"movetype", AICast_ScriptAction_Movetype, NULL},
@@ -469,6 +474,7 @@ cast_script_stack_action_t scriptActions[] =
 
 		{"applyloadout", AICast_ScriptAction_ApplyLoadout, NULL},
 		{"openloadoutmenu", AICast_ScriptAction_OpenLoadoutMenu, NULL},
+		{"opencardgamemenu", AICast_ScriptAction_OpenCardGameMenu, NULL},
 		// Achievements (core game)
 		{"achievement_map_w3d", AICast_ScriptAction_AchievementGeneric, &ACH_W3D_1},
 		{"achievement_map_w3dsec", AICast_ScriptAction_AchievementGeneric, &ACH_W3D_2},

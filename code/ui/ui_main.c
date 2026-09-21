@@ -41,6 +41,7 @@ If you have questions concerning this license or the applicable additional terms
 #include "ui_local.h"
 #include "../steam/steam.h"
 #include "ui_armory.h"
+#include "ui_cardgame.h"
 
 uiInfo_t uiInfo;
 
@@ -705,6 +706,8 @@ void _UI_Refresh( int realtime ) {
 
 	UI_UpdateCvars();
 
+	UI_CardGame_RunFrame();
+
 	if ( Menu_Count() > 0 ) {
 		// paint all the menus
 		Menu_PaintAll();
@@ -1362,6 +1365,173 @@ static void UI_DrawArmoryPoints( rectDef_t *rect, int font, float scale, vec4_t 
 
 	Com_sprintf( text, sizeof( text ), "%d / %d", UI_Armory_PointsTotal() - UI_Armory_PointsUsed(), UI_Armory_PointsTotal() );
 	Text_Paint( rect->x, rect->y, font, scale, color, text, 0, 0, textStyle );
+}
+
+// Big icon on top sized by aspect (no background); iconH must match armory_loadout.menu's descBg gap.
+static void UI_DrawArmoryIconDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle, qhandle_t icon, const char *desc, qboolean wide ) {
+	int iconH = 48;
+	int iconW = wide ? 94 : iconH;
+	int iconTopMargin = 8; // keeps the icon clear of the column's top border
+	char buff[1024];
+	const char *p, *newLinePtr;
+	int len, newLine, textWidth, lineHeight;
+	float y, maxY;
+
+	if ( icon ) {
+		DC->drawHandlePic( rect->x + ( rect->w - iconW ) / 2, rect->y + iconTopMargin, iconW, iconH, icon );
+	}
+	if ( !desc || !desc[0] ) {
+		return;
+	}
+
+	lineHeight = Text_Height( "Ag", font, scale, 0 ) + 3;
+	y = rect->y + iconTopMargin + iconH + lineHeight;
+	maxY = rect->y + rect->h;
+
+	len = 0;
+	buff[0] = '\0';
+	newLine = 0;
+	newLinePtr = desc;
+	p = desc;
+	while ( p ) {
+		if ( *p == ' ' || *p == '\t' || *p == '\n' || *p == '\0' ) {
+			newLine = len;
+			newLinePtr = p + 1;
+		}
+		textWidth = Text_Width( buff, font, scale, 0 );
+		if ( ( newLine && textWidth > rect->w - 4 ) || *p == '\n' || *p == '\0' ) {
+			if ( len && y <= maxY ) {
+				buff[newLine] = '\0';
+				Text_Paint( rect->x + 2, y, font, scale, color, buff, 0, 0, textStyle );
+			}
+			if ( *p == '\0' ) {
+				break;
+			}
+			y += lineHeight;
+			p = newLinePtr;
+			len = 0;
+			newLine = 0;
+			continue;
+		}
+		buff[len++] = *p++;
+		buff[len] = '\0';
+	}
+}
+
+// Appends a translated "Price: N" line below the description; cost < 0 (nothing selected) leaves desc untouched.
+static const char *UI_ArmoryDescWithPrice( const char *desc, int cost, char *buf, int bufSize ) {
+	const char *label;
+
+	if ( cost < 0 ) {
+		return desc;
+	}
+	label = TranslateTable_Find( "ARMORY_PRICE_LABEL" );
+	if ( desc && desc[0] ) {
+		Com_sprintf( buf, bufSize, "%s\n\n^2%s^7 %d", desc, label ? label : "Price:", cost );
+	} else {
+		Com_sprintf( buf, bufSize, "^2%s^7 %d", label ? label : "Price:", cost );
+	}
+	return buf;
+}
+
+static void UI_DrawArmoryWeaponDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
+	char buf[160];
+	const char *desc = UI_ArmoryDescWithPrice( UI_Armory_SelectedWeaponDesc(), UI_Armory_SelectedWeaponCost(), buf, sizeof( buf ) );
+	UI_DrawArmoryIconDesc( rect, font, scale, color, textStyle, UI_Armory_SelectedWeaponIcon(), desc, UI_Armory_SelectedWeaponIsWide() );
+}
+
+static void UI_DrawArmoryEquipDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
+	char buf[160];
+	const char *desc = UI_ArmoryDescWithPrice( UI_Armory_SelectedEquipDesc(), UI_Armory_SelectedEquipCost(), buf, sizeof( buf ) );
+	UI_DrawArmoryIconDesc( rect, font, scale, color, textStyle, UI_Armory_SelectedEquipIcon(), desc, qfalse );
+}
+
+// Item_OwnerDraw_Paint doesn't true-center ownerdraw text, so center it by hand here.
+static void CardGame_PaintCentered( rectDef_t *rect, int font, float scale, vec4_t color, const char *text, int textStyle ) {
+	float centerX = rect->x + rect->w / 2;
+	float width = Text_Width( text, font, scale, 0 );
+
+	Text_Paint( centerX - width / 2, rect->y, font, scale, color, text, 0, 0, textStyle );
+}
+
+static void UI_DrawCardGameChips( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
+	CardGame_PaintCentered( rect, font, scale, color, UI_CardGame_ChipsText(), textStyle );
+}
+
+// Colored by what it's saying: amber for a tie/war, green for a win, red for a loss, itemDef forecolor otherwise.
+static void UI_DrawCardGameResult( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
+	const char *text = UI_CardGame_ResultText();
+	cardGamePhase_t phase = UI_CardGame_Phase();
+	vec4_t outcomeColor;
+
+	if ( !text || !text[0] ) {
+		return;
+	}
+
+	if ( phase == CG_PHASE_WAR_ANNOUNCE ) {
+		outcomeColor[0] = 1.0f; outcomeColor[1] = 0.6f; outcomeColor[2] = 0.15f; outcomeColor[3] = 1.0f;
+		color = outcomeColor;
+	} else if ( phase == CG_PHASE_ROUND_OVER || phase == CG_PHASE_GAME_OVER ) {
+		if ( UI_CardGame_ResultIsWin() ) {
+			outcomeColor[0] = 0.4f; outcomeColor[1] = 1.0f; outcomeColor[2] = 0.4f; outcomeColor[3] = 1.0f;
+		} else {
+			outcomeColor[0] = 1.0f; outcomeColor[1] = 0.35f; outcomeColor[2] = 0.3f; outcomeColor[3] = 1.0f;
+		}
+		color = outcomeColor;
+	}
+
+	CardGame_PaintCentered( rect, font, scale, color, text, textStyle );
+}
+
+// Ownerdraw, not a "background" shader, so the felt shares the card slots' placement path.
+static qhandle_t cardGameTableBgShader = -1;
+static void UI_DrawCardGameTableBg( rectDef_t *rect ) {
+	if ( cardGameTableBgShader == -1 ) {
+		cardGameTableBgShader = trap_R_RegisterShaderNoMip( "ui/assets/cards/table.jpg" );
+	}
+	if ( cardGameTableBgShader ) {
+		UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, cardGameTableBgShader );
+	}
+}
+
+static qboolean CardGame_MouseOverRect( rectDef_t *rect ) {
+	return uiInfo.uiDC.cursorx >= rect->x && uiInfo.uiDC.cursorx <= rect->x + rect->w &&
+		   uiInfo.uiDC.cursory >= rect->y && uiInfo.uiDC.cursory <= rect->y + rect->h;
+}
+
+// Highlight priority: opponent's pending pick (red) > eliminated (dimmed) > non-pickable (neutral) > hover (gold).
+static void UI_DrawCardGameSlot( rectDef_t *rect, float special, vec4_t color ) {
+	int slot = (int)special;
+	qhandle_t icon = UI_CardGame_TableSlotIcon( slot );
+	vec4_t drawColor;
+
+	if ( !icon ) {
+		return;
+	}
+
+	// Drop shadow so the card doesn't sit perfectly flush with the felt.
+	{
+		vec4_t shadowColor = { 0.0f, 0.0f, 0.0f, 0.4f };
+		DC->setColor( shadowColor );
+		UI_DrawHandlePic( rect->x + 4, rect->y + 4, rect->w, rect->h, uiInfo.uiDC.whiteShader );
+		DC->setColor( NULL );
+	}
+
+	if ( UI_CardGame_PendingOpponentSlot() == slot ) {
+		drawColor[0] = 1.0f; drawColor[1] = 0.3f; drawColor[2] = 0.3f; drawColor[3] = 1.0f;
+	} else if ( UI_CardGame_TableSlotIsEliminated( slot ) ) {
+		drawColor[0] = drawColor[1] = drawColor[2] = 0.4f; drawColor[3] = 1.0f;
+	} else if ( !UI_CardGame_TableSlotIsPlayable( slot ) ) {
+		drawColor[0] = drawColor[1] = drawColor[2] = drawColor[3] = 1.0f;
+	} else if ( CardGame_MouseOverRect( rect ) ) {
+		drawColor[0] = 1.0f; drawColor[1] = 0.85f; drawColor[2] = 0.3f; drawColor[3] = 1.0f;
+	} else {
+		Vector4Copy( color, drawColor );
+	}
+
+	DC->setColor( drawColor );
+	UI_DrawHandlePic( rect->x, rect->y, rect->w, rect->h, icon );
+	DC->setColor( NULL );
 }
 
 //----(SA)	added
@@ -2829,6 +2999,24 @@ static void UI_OwnerDraw( float x, float y, float w, float h, float text_x, floa
 		break;
 	case UI_ARMORY_POINTS:
 		UI_DrawArmoryPoints( &rect, font, scale, color, textStyle );
+		break;
+	case UI_ARMORY_WEAPON_DESC:
+		UI_DrawArmoryWeaponDesc( &rect, font, scale, color, textStyle );
+		break;
+	case UI_ARMORY_EQUIP_DESC:
+		UI_DrawArmoryEquipDesc( &rect, font, scale, color, textStyle );
+		break;
+	case UI_CARDGAME_CHIPS:
+		UI_DrawCardGameChips( &rect, font, scale, color, textStyle );
+		break;
+	case UI_CARDGAME_RESULT:
+		UI_DrawCardGameResult( &rect, font, scale, color, textStyle );
+		break;
+	case UI_CARDGAME_TABLE_BG:
+		UI_DrawCardGameTableBg( &rect );
+		break;
+	case UI_CARDGAME_SLOT:
+		UI_DrawCardGameSlot( &rect, special, color );
 		break;
 	case UI_EFFECTS:
 		UI_DrawEffects( &rect, scale, color );
@@ -4884,6 +5072,37 @@ static void UI_RunMenuScript( char **args ) {
 			Menu_SetFeederSelection( NULL, FEEDER_ALLMAPS, 0, "campaign_menu" );
 		} else if ( Q_stricmp( name, "loadArmoryRoster" ) == 0 ) {
 			UI_Armory_LoadRosterForCurrentMap();
+			// sync the listbox widgets to our own selection state, or the description panel stays blank until clicked
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_WEAPONS, 0, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_EQUIP, 0, "armory_loadout" );
+		} else if ( Q_stricmp( name, "armoryRandomize" ) == 0 ) {
+			UI_Armory_Randomize();
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_WEAPONS, -1, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_EQUIP, -1, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, -1, "armory_loadout" );
+		} else if ( Q_stricmp( name, "armoryRecommended" ) == 0 ) {
+			UI_Armory_ApplyRecommended();
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_WEAPONS, -1, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_EQUIP, -1, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, -1, "armory_loadout" );
+		} else if ( Q_stricmp( name, "armoryAddWeapon" ) == 0 ) {
+			UI_Armory_AddSelectedWeapon();
+			// sync the build listbox's own highlight to the newly-added item
+			if ( UI_Armory_SelectedBuildIndex() >= 0 ) {
+				Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, UI_Armory_SelectedBuildIndex(), "armory_loadout" );
+			}
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_WEAPONS, -1, "armory_loadout" );
+		} else if ( Q_stricmp( name, "armoryAddEquip" ) == 0 ) {
+			UI_Armory_AddSelectedEquip();
+			if ( UI_Armory_SelectedBuildIndex() >= 0 ) {
+				Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, UI_Armory_SelectedBuildIndex(), "armory_loadout" );
+			}
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_EQUIP, -1, "armory_loadout" );
+		} else if ( Q_stricmp( name, "armoryRemoveSelected" ) == 0 ) {
+			UI_Armory_RemoveSelectedBuild();
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, -1, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_WEAPONS, -1, "armory_loadout" );
+			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_EQUIP, -1, "armory_loadout" );
 		} else if ( Q_stricmp( name, "armoryConfirm" ) == 0 ) {
 			char cmd[1024];
 			UI_Armory_BuildConfirmCommand( cmd, sizeof( cmd ) );
@@ -4892,11 +5111,25 @@ static void UI_RunMenuScript( char **args ) {
 			trap_Key_ClearStates();
 			trap_Cvar_Set( "cl_paused", "0" );
 			Menus_CloseAll();
-		} else if ( Q_stricmp( name, "armoryCancel" ) == 0 ) {
+		} else if ( Q_stricmp( name, "cardGameBetUp" ) == 0 ) {
+			UI_CardGame_SetBet( UI_CardGame_CurrentBet() + 1 );
+		} else if ( Q_stricmp( name, "cardGameBetDown" ) == 0 ) {
+			UI_CardGame_SetBet( UI_CardGame_CurrentBet() - 1 );
+		} else if ( Q_stricmp( name, "cardGameDeal" ) == 0 ) {
+			UI_CardGame_Deal();
+		} else if ( Q_stricmp( name, "cardGameContinue" ) == 0 ) {
+			UI_CardGame_ContinueAfterRound();
+		} else if ( Q_stricmp( name, "cardGameExit" ) == 0 ) {
 			trap_Key_SetCatcher( trap_Key_GetCatcher() & ~KEYCATCH_UI );
 			trap_Key_ClearStates();
 			trap_Cvar_Set( "cl_paused", "0" );
 			Menus_CloseAll();
+		} else if ( !Q_stricmpn( name, "cardGamePick", 12 ) ) {
+			// one itemDef per table slot calls "cardGamePick<N>" - see cardgame.menu
+			int slot = atoi( name + 12 );
+			if ( UI_CardGame_TableSlotIsPlayable( slot ) ) {
+				UI_CardGame_PlayerPick( slot );
+			}
 		} else if ( Q_stricmp( name, "StartCampaign" ) == 0 ) {
 			trap_Cvar_Set( "cg_thirdPerson", "0" );
 			trap_Cvar_Set( "cg_cameraOrbit", "0" );
@@ -6156,9 +6389,9 @@ static int UI_FeederCount( float feederID ) {
 	}
 	// -NERVE - SMF
 	else if ( feederID == FEEDER_ARMORY_WEAPONS ) {
-		return UI_Armory_WeaponCount();
+		return UI_Armory_AvailableWeaponCount();
 	} else if ( feederID == FEEDER_ARMORY_EQUIP ) {
-		return UI_Armory_EquipCount();
+		return UI_Armory_AvailableEquipCount();
 	} else if ( feederID == FEEDER_ARMORY_BUILD ) {
 		return UI_Armory_BuildCount();
 	}
@@ -6414,16 +6647,16 @@ static const char *UI_FeederItemText( float feederID, int index, int column, qha
 	}
 	else if ( feederID == FEEDER_ARMORY_WEAPONS ) {
 		if ( column == 0 ) {
-			*handle = UI_Armory_WeaponIcon( index );
+			*handle = UI_Armory_AvailableWeaponIcon( index );
 			return "";
 		}
-		return UI_Armory_WeaponName( index );
+		return UI_Armory_AvailableWeaponName( index );
 	} else if ( feederID == FEEDER_ARMORY_EQUIP ) {
 		if ( column == 0 ) {
-			*handle = UI_Armory_EquipIcon( index );
+			*handle = UI_Armory_AvailableEquipIcon( index );
 			return "";
 		}
-		return UI_Armory_EquipName( index );
+		return UI_Armory_AvailableEquipName( index );
 	} else if ( feederID == FEEDER_ARMORY_BUILD ) {
 		if ( column == 0 ) {
 			*handle = UI_Armory_BuildIcon( index );
@@ -6437,6 +6670,18 @@ static const char *UI_FeederItemText( float feederID, int index, int column, qha
 	}
 	// -NERVE - SMF
 	return "";
+}
+
+
+static qboolean UI_FeederItemIsWide( float feederID, int index ) {
+	if ( feederID == FEEDER_ARMORY_WEAPONS ) {
+		return UI_Armory_AvailableWeaponIsWide( index );
+	} else if ( feederID == FEEDER_ARMORY_EQUIP ) {
+		return qfalse;
+	} else if ( feederID == FEEDER_ARMORY_BUILD ) {
+		return UI_Armory_BuildIconIsWide( index );
+	}
+	return qtrue;
 }
 
 
@@ -6579,12 +6824,22 @@ static void UI_FeederSelection( float feederID, int index ) {
 	}
 	// -NERVE - SMF
 	else if ( feederID == FEEDER_ARMORY_WEAPONS ) {
-		UI_Armory_ToggleWeapon( index );
+		UI_Armory_SelectAvailableWeapon( index );
 	} else if ( feederID == FEEDER_ARMORY_EQUIP ) {
-		UI_Armory_ToggleEquip( index );
+		UI_Armory_SelectAvailableEquip( index );
 	} else if ( feederID == FEEDER_ARMORY_BUILD ) {
-		UI_Armory_RemoveBuildIndex( index );
+		UI_Armory_SelectBuild( index );
 	}
+}
+
+// Greys out mapper-forced "perma" rows in the armory build list (see ui_armory.c/UI_Armory_BuildIsPerma).
+static qboolean UI_FeederItemColor( float feederID, int index, vec4_t outColor ) {
+	if ( feederID == FEEDER_ARMORY_BUILD && UI_Armory_BuildIsPerma( index ) ) {
+		outColor[0] = outColor[1] = outColor[2] = 0.5f;
+		outColor[3] = 1.0f;
+		return qtrue;
+	}
+	return qfalse;
 }
 
 // TTimo: unused
@@ -7213,6 +7468,8 @@ void _UI_Init( qboolean inGameLoad ) {
 	uiInfo.uiDC.getbonusString = &UI_bonusString;
 	uiInfo.uiDC.feederSelection = &UI_FeederSelection;
 	uiInfo.uiDC.feederAddItem = &UI_FeederAddItem;                  // NERVE - SMF
+	uiInfo.uiDC.feederItemColor = &UI_FeederItemColor;
+	uiInfo.uiDC.feederItemIsWide = &UI_FeederItemIsWide;
 	uiInfo.uiDC.setBinding = &trap_Key_SetBinding;
 	uiInfo.uiDC.getBindingBuf = &trap_Key_GetBindingBuf;
 	uiInfo.uiDC.keynumToStringBuf = &trap_Key_KeynumToStringBuf;
@@ -7254,6 +7511,9 @@ void _UI_Init( qboolean inGameLoad ) {
 	UI_ParseGameInfo("gameinfo.txt");
 	UI_LoadArenas();
 	UI_ResolveArenaLongnames();
+	UI_Armory_ResolveEquipTranslations();
+	UI_Armory_ResolveWeaponDescTranslations();
+	UI_CardGame_ResolveTranslations();
 
 	menuSet = UI_Cvar_VariableString( "ui_menuFiles" );
 	if ( menuSet == NULL || menuSet[0] == '\0' ) {
@@ -7532,6 +7792,14 @@ void _UI_SetActiveMenu( uiMenuCommand_t menu ) {
 			trap_Key_SetCatcher( KEYCATCH_UI );
 			Menus_CloseAll();
 			Menus_ActivateByName( "armory_loadout" );
+			return;
+
+		case UIMENU_CARDGAME:
+			trap_Cvar_Set( "cl_paused", "1" );
+			trap_Key_SetCatcher( KEYCATCH_UI );
+			Menus_CloseAll();
+			UI_CardGame_Reset();
+			Menus_ActivateByName( "cardgame" );
 			return;
 
 		case UIMENU_BOOK1:

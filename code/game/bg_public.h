@@ -258,6 +258,7 @@ typedef enum {
 #define PMF_BACKWARDS_RUN   16      // coast down to backwards run
 #define PMF_TIME_LAND       32      // pm_time is time before rejump
 #define PMF_TIME_KNOCKBACK  64      // pm_time is an air-accelerate only time
+#define PMF_SITTING         128     // on a target_sit - blocks crouch and (if disarmed) re-equipping a weapon
 #define PMF_TIME_WATERJUMP  256     // pm_time is waterjump
 #define PMF_RESPAWNED       512     // clear after attack and jump buttons come up
 #define PMF_USE_ITEM_HELD   1024
@@ -493,6 +494,7 @@ typedef enum {
 	PERK_HEAVYARMOR,        // armory equipment: raises armor cap to 200 for the current chapter
 	PERK_LIGHTWEIGHT,       // armory equipment: infinite stamina + move speed for the current chapter
 	PERK_TACTICALGLOVES,    // armory equipment: faster reload for the current chapter
+	PERK_CAMOSUIT,          // armory equipment: harder for hostile AI to spot, for the current chapter
 	NUM_PERKS
 } perk_t;
 

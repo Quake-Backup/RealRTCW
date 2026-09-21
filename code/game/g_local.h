@@ -651,6 +651,20 @@ struct gclient_s {
 	qboolean hasPurchased;
 
 	qboolean holstered;            // weapon put away via the "holster" command (kept at struct end for savegame compat)
+
+	qboolean rangeLoadoutSuspended;         // qtrue while the real loadout below is stashed away
+	int rangeSavedWeapon;                   // ps.weapon at suspend time
+	int rangeSavedWeapons[MAX_WEAPONS / ( sizeof( int ) * 8 )];
+	int rangeSavedAmmo[MAX_WEAPONS];
+	int rangeSavedAmmoClip[MAX_WEAPONS];
+	int rangeSavedHoldable[MAX_HOLDABLE];
+
+	// sitting on a target_sit (kept at struct end for savegame compat)
+	qboolean sitting;
+	int sitSpotEntNum;              // the target_sit entity we're sitting on
+	vec3_t sitReturnOrigin;         // where to put them back on standing up
+	qboolean sitForcedHolster;      // qtrue if sitting down force-holstered the weapon
+	int sitSavedWeapon;             // ps.weapon at the moment we force-holstered
 };
 
 
@@ -982,6 +996,11 @@ void TeleportPlayer( gentity_t *player, vec3_t origin, vec3_t angles );
 int G_GetEnemyPosition(gentity_t *ent, gentity_t *targ);
 
 //
+// g_target.c
+//
+void Unsit( gentity_t *ent );      // stand up from a target_sit, if sitting on one
+
+//
 // g_weapon.c
 //
 qboolean LogAccuracyHit( gentity_t *target, gentity_t *attacker );
@@ -1196,6 +1215,15 @@ extern vmCvar_t g_loadoutCostFullAmmoBag;
 extern vmCvar_t g_loadoutCostHeavyArmor;
 extern vmCvar_t g_loadoutCostLightweightGear;
 extern vmCvar_t g_loadoutCostTacticalGloves;
+extern vmCvar_t g_loadoutCostGrenades;
+extern vmCvar_t g_loadoutCostCamoSuit;
+extern vmCvar_t g_loadoutCostAirstrikeSignal;
+extern vmCvar_t g_loadoutCostGasGrenade;
+extern vmCvar_t g_loadoutCostSmokeGrenade;
+
+extern vmCvar_t g_camoSuitFovScale;
+extern vmCvar_t g_camoSuitRangeScale;
+extern vmCvar_t g_camoSuitInnerRadiusScale;
 
 extern vmCvar_t g_playerSurvivalClass;
 

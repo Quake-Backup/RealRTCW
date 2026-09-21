@@ -68,6 +68,7 @@ player
 		lockplayer off
 		screenfade 6000 out
 		setmovespeed veryslow
+		suspendweapons
 	}
 	
 	trigger dream_land_escape
@@ -80,6 +81,7 @@ player
 	   screenfade 3000 out
 	   setmovespeed default
 	   achievement_malta_nightmare
+	   restoreweapons
 	}
 	
 	trigger briefing_1
@@ -121,7 +123,12 @@ player
 	
 	trigger give_me_your_weapons
 	{
-	    takeweapon all
+	    suspendweapons
+	}
+	
+	trigger take_your_weapons_back
+	{
+	    restoreweapons
 	}
 	
 	trigger take_knives
@@ -194,12 +201,6 @@ player
 		accum 4 set 1
 	}
 	
-	trigger armory_start
-	{
-		trigger waters greetings
-		openloadoutmenu
-	}
-	
 	trigger shocktreatment
 	{
 		trigger handle turnon
@@ -215,6 +216,11 @@ player
 	   alertentity dream_eg1
 	   alertentity dream_eg2
 	   alertentity dream_hunter
+	}
+	
+	trigger armory
+	{
+	  openloadoutmenu
 	}
 	
 	trigger secret1
@@ -618,7 +624,7 @@ bar_guy1
 
     activate player
     {
-	  deny
+	  opencardgamemenu
     }	  
 	
 	trigger stop_it
@@ -2384,12 +2390,13 @@ waters
 	trigger walktothetable
 	{
 	   wait 100
-	   playsound waters_meandlt
+	   //playsound waters_meandlt
 	   walktomarker waters_spot2 nostop
 	   facetargetangles waters_spot2
-	   playsound waters_meandlt2
-	   wait 7000
-	   trigger waters briefing
+	   playsound waters_gladtoseeya
+	   //playsound waters_meandlt2
+	   //wait 7000
+	   //trigger waters briefing
 	}
 	
 	trigger briefing

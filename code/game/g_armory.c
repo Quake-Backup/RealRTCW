@@ -27,18 +27,31 @@ qboolean AICast_ScriptAction_GiveWeapon( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_SetAmmo( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_SetClip( cast_state_t *cs, char *params );
 qboolean AICast_ScriptAction_GivePerk( cast_state_t *cs, char *params );
+qboolean AICast_ScriptAction_SetArmor( cast_state_t *cs, char *params );
 
-#define ARMORY_MAX_PICKS 40
+#define ARMORY_MAX_PICKS ARMORY_MAX_ROSTER_WEAPONS
 
+// Perma items are excluded here so a (stale or modified) client can never double-pick/double-charge them.
 static qboolean G_Armory_WeaponInRoster( const armoryRoster_t *roster, int weapon ) {
 	int i;
 
 	for ( i = 0; i < roster->numWeapons; i++ ) {
 		if ( roster->weapons[i] == weapon ) {
-			return qtrue;
+			return !roster->perma[i];
 		}
 	}
 	return qfalse;
+}
+
+static qboolean G_Armory_EquipInRoster( const armoryRoster_t *roster, const armoryEquipDef_t *def ) {
+	int count, idx;
+	const armoryEquipDef_t *list = BG_Armory_GetEquipList( &count );
+
+	idx = (int)( def - list );
+	if ( idx < 0 || idx >= count || idx >= ARMORY_MAX_EQUIP ) {
+		return qfalse;
+	}
+	return roster->equipPresent[idx] && !roster->equipPerma[idx];
 }
 
 // Comma-separated -> space-separated, so COM_ParseExt (splits on whitespace only) can tokenize it.
@@ -49,6 +62,47 @@ static void G_Armory_CommaToSpace( char *s ) {
 		}
 		s++;
 	}
+}
+
+// Shared by every give path below (roster weapons and weapon-granting equip picks alike).
+static void G_Armory_GrantWeaponWithAmmo( cast_state_t *cs, gentity_t *ent, weapon_t weaponNum, qboolean fullAmmoBag, qboolean grenadesFull ) {
+	gitem_t *item = BG_FindItemForWeapon( weaponNum );
+	int maxAmmo;
+	char args[64];
+
+	if ( !item ) {
+		return;
+	}
+
+	AICast_ScriptAction_GiveWeapon( cs, item->classname );
+
+	maxAmmo = BG_GetMaxAmmo( &ent->client->ps, weaponNum, 1.0f );
+	if ( maxAmmo > 0 ) {
+		int target;
+		qboolean giveFull = BG_Armory_IsGrenadeWeapon( weaponNum ) ? grenadesFull : fullAmmoBag;
+
+		target = giveFull ? maxAmmo : maxAmmo / 2;
+
+		Com_sprintf( args, sizeof( args ), "%s %d", item->classname, target );
+		AICast_ScriptAction_SetAmmo( cs, args );
+
+		Com_sprintf( args, sizeof( args ), "%s full", item->classname );
+		AICast_ScriptAction_SetClip( cs, args );
+	}
+}
+
+// Shared by both perk-granting loops below. Armor itself is granted once, unconditionally, at the end of
+// G_Armory_Confirm - by then any Heavy Armor pick has already landed in ps.perks, so G_GetArmorCap() there
+// sees it and grants 200 instead of the 100 baseline.
+static void G_Armory_GrantPerk( cast_state_t *cs, const armoryEquipDef_t *def ) {
+	char classname[64];
+
+	if ( def->perkTag < 0 ) {
+		return;
+	}
+
+	Com_sprintf( classname, sizeof( classname ), "perk_%s", def->id );
+	AICast_ScriptAction_GivePerk( cs, classname );
 }
 
 /*
@@ -74,6 +128,7 @@ void G_Armory_Confirm( gentity_t *ent, const char *weaponArg, const char *equipA
 	const armoryEquipDef_t *pickedEquip[ARMORY_MAX_PICKS];
 	int numPickedEquip = 0;
 	qboolean fullAmmoBag = qfalse;
+	qboolean grenadesFull = qfalse;
 
 	int totalCost;
 	int i;
@@ -116,7 +171,7 @@ void G_Armory_Confirm( gentity_t *ent, const char *weaponArg, const char *equipA
 		pickedWeapons[numPickedWeapons++] = item->giTag;
 	}
 
-	// equipment: validate against the fixed 4-entry table
+	// equipment: validate against the fixed 4-entry table, then against what this map's roster actually offers
 	Q_strncpyz( buf, equipArg ? equipArg : "", sizeof( buf ) );
 	G_Armory_CommaToSpace( buf );
 	p = buf;
@@ -132,18 +187,23 @@ void G_Armory_Confirm( gentity_t *ent, const char *weaponArg, const char *equipA
 		}
 
 		def = BG_Armory_FindEquip( tok );
-		if ( !def ) {
+		if ( !def || !G_Armory_EquipInRoster( &roster, def ) ) {
 			continue;
 		}
 
-		if ( def->perkTag < 0 ) {
-			fullAmmoBag = qtrue;    // Full Ammo Bag: no perk, just an ammo-grant flag
+		if ( !Q_stricmp( def->id, "fullammobag" ) ) {
+			fullAmmoBag = qtrue;    // no perk, just an ammo-grant flag - weapons only, not grenades
+		} else if ( !Q_stricmp( def->id, "grenades" ) ) {
+			grenadesFull = qtrue;   // same idea as Full Ammo Bag, but scoped to grenade-type weapons
 		}
 		pickedEquip[numPickedEquip++] = def;
 	}
 
 	// budget: reject the whole thing if over, no partial application
-	totalCost = numPickedWeapons * g_loadoutWeaponCost.integer;
+	totalCost = 0;
+	for ( i = 0; i < numPickedWeapons; i++ ) {
+		totalCost += BG_Armory_GetWeaponCost( pickedWeapons[i] );
+	}
 	for ( i = 0; i < numPickedEquip; i++ ) {
 		totalCost += BG_Armory_GetEquipCost( pickedEquip[i] );
 	}
@@ -155,29 +215,55 @@ void G_Armory_Confirm( gentity_t *ent, const char *weaponArg, const char *equipA
 	// grant - applies immediately, no applyloadout/endmap bookkeeping
 	cs = AICast_GetCastState( ent->s.number );
 
-	AICast_ScriptAction_GiveWeapon( cs, "weapon_knife" );  // baseline, not counted against points
+	// perma equip: mapper-forced picks, contribute to the ammo-boost flags exactly like a real pick would
+	{
+		int equipCount, ei;
+		const armoryEquipDef_t *equipList = BG_Armory_GetEquipList( &equipCount );
+
+		for ( ei = 0; ei < equipCount && ei < ARMORY_MAX_EQUIP; ei++ ) {
+			if ( !roster.equipPerma[ei] ) {
+				continue;
+			}
+			if ( !Q_stricmp( equipList[ei].id, "fullammobag" ) ) {
+				fullAmmoBag = qtrue;
+			} else if ( !Q_stricmp( equipList[ei].id, "grenades" ) ) {
+				grenadesFull = qtrue;
+			}
+			G_Armory_GrantPerk( cs, &equipList[ei] );
+			if ( equipList[ei].weaponTag != WP_NONE ) {
+				G_Armory_GrantWeaponWithAmmo( cs, ent, equipList[ei].weaponTag, fullAmmoBag, grenadesFull );
+			}
+		}
+	}
+
+	// binoculars and the knife are baseline gear, not a pick - every loadout gets them silently
+	ent->client->ps.stats[STAT_KEYS] |= ( 1 << INV_BINOCS );
+	G_Armory_GrantWeaponWithAmmo( cs, ent, WP_KNIFE, fullAmmoBag, grenadesFull );
+
+	// perma weapons: mapper-forced picks, always granted, free of charge
+	for ( i = 0; i < roster.numWeapons; i++ ) {
+		if ( !roster.perma[i] ) {
+			continue;
+		}
+		G_Armory_GrantWeaponWithAmmo( cs, ent, roster.weapons[i], fullAmmoBag, grenadesFull );
+	}
 
 	for ( i = 0; i < numPickedWeapons; i++ ) {
-		gitem_t *item = BG_FindItemForWeapon( pickedWeapons[i] );
-		int maxAmmo = BG_GetMaxAmmo( &ent->client->ps, pickedWeapons[i], 1.0f );
-		int target = fullAmmoBag ? maxAmmo : maxAmmo / 2;
-		char args[64];
-
-		AICast_ScriptAction_GiveWeapon( cs, item->classname );
-
-		Com_sprintf( args, sizeof( args ), "%s %d", item->classname, target );
-		AICast_ScriptAction_SetAmmo( cs, args );
-
-		Com_sprintf( args, sizeof( args ), "%s full", item->classname );
-		AICast_ScriptAction_SetClip( cs, args );
+		G_Armory_GrantWeaponWithAmmo( cs, ent, pickedWeapons[i], fullAmmoBag, grenadesFull );
 	}
 
 	for ( i = 0; i < numPickedEquip; i++ ) {
-		if ( pickedEquip[i]->perkTag >= 0 ) {
-			char classname[64];
-
-			Com_sprintf( classname, sizeof( classname ), "perk_%s", pickedEquip[i]->id );
-			AICast_ScriptAction_GivePerk( cs, classname );
+		G_Armory_GrantPerk( cs, pickedEquip[i] );
+		if ( pickedEquip[i]->weaponTag != WP_NONE ) {
+			G_Armory_GrantWeaponWithAmmo( cs, ent, pickedEquip[i]->weaponTag, fullAmmoBag, grenadesFull );
 		}
+	}
+
+	// baseline armor - 100 normally, 200 if Heavy Armor was picked above (already reflected in ps.perks by now)
+	{
+		char armorArgs[16];
+
+		Com_sprintf( armorArgs, sizeof( armorArgs ), "%d", G_GetArmorCap( ent->client ) );
+		AICast_ScriptAction_SetArmor( cs, armorArgs );
 	}
 }

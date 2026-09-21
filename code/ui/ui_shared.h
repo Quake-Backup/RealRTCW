@@ -390,6 +390,12 @@ typedef struct {
 	void ( *feederSelection )( float feederID, int index );
 	void ( *feederAddItem )( float feederID, const char *name, int index );           // NERVE - SMF
 
+	// Optional per-row text color for LISTBOX_TEXT rows; qfalse keeps the default forecolor. Unbound (NULL) by cgame.
+	qboolean ( *feederItemColor )( float feederID, int index, vec4_t outColor );
+
+	// Optional per-row icon aspect hint for LISTBOX_TEXT column images; qfalse draws square instead of landscape.
+	qboolean ( *feederItemIsWide )( float feederID, int index );
+
 	void ( *keynumToStringBuf )( int keynum, char *buf, int buflen );
 	void ( *getBindingBuf )( int keynum, char *buf, int buflen );
 	void ( *setBinding )( int keynum, const char *binding );

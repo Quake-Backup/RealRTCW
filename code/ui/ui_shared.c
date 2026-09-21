@@ -4346,17 +4346,28 @@ void Item_ListBox_Paint( itemDef_t *item ) {
 			y = item->window.rect.y + 1;
 			for ( i = listPtr->startPos; i < count; i++ ) {
 				const char *text;
+				vec4_t rowColorBuf;
+				float *rowColor = item->window.foreColor;
 				// always draw at least one
 				// which may overdraw the box if it is too small for the element
+
+				if ( DC->feederItemColor && DC->feederItemColor( item->special, i, rowColorBuf ) ) {
+					rowColor = rowColorBuf;
+				}
 
 				if ( listPtr->numColumns > 0 ) {
 					int j;
 					for ( j = 0; j < listPtr->numColumns; j++ ) {
 						text = DC->feederItemText( item->special, i, j, &optionalImage );
 						if ( optionalImage >= 0 ) {
-							DC->drawHandlePic( x + 4 + listPtr->columnInfo[j].pos, y - 1 + listPtr->elementHeight / 2, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage );
+							// non-wide (square/portrait) art is drawn as a square so it isn't crushed
+							qboolean wide = !DC->feederItemIsWide || DC->feederItemIsWide( item->special, i );
+							int iconW = listPtr->columnInfo[j].width;
+							int iconH = wide ? (int)( iconW * 0.6f ) : iconW;
+							DC->drawHandlePic( x + 4 + listPtr->columnInfo[j].pos, y + ( listPtr->elementHeight - iconH ) / 2, iconW, iconH, optionalImage );
 						} else if ( text ) {
-							DC->drawText( x + 4 + listPtr->columnInfo[j].pos, y + listPtr->elementHeight, item->font, item->textscale, item->window.foreColor, text, 0, listPtr->columnInfo[j].maxChars, item->textStyle );
+							int textH = DC->textHeight( text, item->font, item->textscale, listPtr->columnInfo[j].maxChars );
+							DC->drawText( x + 4 + listPtr->columnInfo[j].pos, y + ( listPtr->elementHeight + textH ) / 2, item->font, item->textscale, rowColor, text, 0, listPtr->columnInfo[j].maxChars, item->textStyle );
 						}
 					}
 				} else {
@@ -4364,7 +4375,7 @@ void Item_ListBox_Paint( itemDef_t *item ) {
 					if ( optionalImage >= 0 ) {
 						//DC->drawHandlePic(x + 4 + listPtr->elementHeight, y, listPtr->columnInfo[j].width, listPtr->columnInfo[j].width, optionalImage);
 					} else if ( text ) {
-						DC->drawText( x + 4, y + listPtr->elementHeight, item->font, item->textscale, item->window.foreColor, text, 0, 0, item->textStyle );
+						DC->drawText( x + 4, y + listPtr->elementHeight, item->font, item->textscale, rowColor, text, 0, 0, item->textStyle );
 					}
 				}
 
