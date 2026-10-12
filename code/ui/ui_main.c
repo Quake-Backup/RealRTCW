@@ -1368,17 +1368,45 @@ static void UI_DrawArmoryPoints( rectDef_t *rect, int font, float scale, vec4_t 
 }
 
 // Big icon on top sized by aspect (no background); iconH must match armory_loadout.menu's descBg gap.
-static void UI_DrawArmoryIconDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle, qhandle_t icon, const char *desc, qboolean wide ) {
+// hasCamoColumn (weapons only) left-aligns the icon and adds a named camo swatch to its right.
+static void UI_DrawArmoryIconDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle, qhandle_t icon, qboolean hasCamoColumn, qhandle_t camoIcon, const char *camoName, const char *desc, qboolean wide ) {
 	int iconH = 48;
 	int iconW = wide ? 94 : iconH;
 	int iconTopMargin = 8; // keeps the icon clear of the column's top border
+	int iconLeftMargin = 4;
+	int iconX = hasCamoColumn ? rect->x + iconLeftMargin : rect->x + ( rect->w - iconW ) / 2;
 	char buff[1024];
 	const char *p, *newLinePtr;
 	int len, newLine, textWidth, lineHeight;
 	float y, maxY;
 
 	if ( icon ) {
-		DC->drawHandlePic( rect->x + ( rect->w - iconW ) / 2, rect->y + iconTopMargin, iconW, iconH, icon );
+		DC->drawHandlePic( iconX, rect->y + iconTopMargin, iconW, iconH, icon );
+	}
+	if ( hasCamoColumn && camoIcon ) {
+		int gap = 6;
+		int nameLineH = 10;
+		int swatchBottom = rect->y + iconTopMargin + iconH;
+		int availW = ( rect->x + rect->w - iconLeftMargin ) - ( iconX + iconW + gap );
+		int availH = iconTopMargin + iconH - nameLineH;
+		int swatchSize = ( availW < availH ) ? availW : availH;
+		int swatchX, swatchY;
+		vec4_t borderColor = { .5f, .7f, .8f, .8f };
+
+		if ( swatchSize > 64 ) {
+			swatchSize = 64;
+		}
+		swatchX = iconX + iconW + gap;
+		swatchY = swatchBottom - swatchSize;
+
+		if ( camoName && camoName[0] ) {
+			float nameWidth = Text_Width( camoName, font, scale, 0 );
+			Text_Paint( swatchX + ( swatchSize - nameWidth ) / 2, rect->y + nameLineH, font, scale, color, camoName, 0, 0, textStyle );
+		}
+
+		DC->fillRect( swatchX, swatchY, swatchSize, swatchSize, colorBlack );
+		DC->drawHandlePic( swatchX, swatchY, swatchSize, swatchSize, camoIcon );
+		DC->drawRect( swatchX, swatchY, swatchSize, swatchSize, 1, borderColor );
 	}
 	if ( !desc || !desc[0] ) {
 		return;
@@ -1435,15 +1463,27 @@ static const char *UI_ArmoryDescWithPrice( const char *desc, int cost, char *buf
 }
 
 static void UI_DrawArmoryWeaponDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
-	char buf[160];
-	const char *desc = UI_ArmoryDescWithPrice( UI_Armory_SelectedWeaponDesc(), UI_Armory_SelectedWeaponCost(), buf, sizeof( buf ) );
-	UI_DrawArmoryIconDesc( rect, font, scale, color, textStyle, UI_Armory_SelectedWeaponIcon(), desc, UI_Armory_SelectedWeaponIsWide() );
+	// price is drawn separately (UI_DrawArmoryWeaponPrice) at a fixed spot so the camo button can sit next to it
+	UI_DrawArmoryIconDesc( rect, font, scale, color, textStyle, UI_Armory_SelectedWeaponIcon(), qtrue, UI_Armory_SelectedWeaponCamoIcon(), UI_Armory_SelectedWeaponCamoName(), UI_Armory_SelectedWeaponDesc(), UI_Armory_SelectedWeaponIsWide() );
+}
+
+static void UI_DrawArmoryWeaponPrice( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
+	int cost = UI_Armory_SelectedWeaponCost();
+	const char *label;
+	char text[32];
+
+	if ( cost < 0 ) {
+		return;
+	}
+	label = TranslateTable_Find( "ARMORY_PRICE_LABEL" );
+	Com_sprintf( text, sizeof( text ), "^2%s^7 %d", label ? label : "Price:", cost );
+	Text_Paint( rect->x, rect->y, font, scale, color, text, 0, 0, textStyle );
 }
 
 static void UI_DrawArmoryEquipDesc( rectDef_t *rect, int font, float scale, vec4_t color, int textStyle ) {
 	char buf[160];
 	const char *desc = UI_ArmoryDescWithPrice( UI_Armory_SelectedEquipDesc(), UI_Armory_SelectedEquipCost(), buf, sizeof( buf ) );
-	UI_DrawArmoryIconDesc( rect, font, scale, color, textStyle, UI_Armory_SelectedEquipIcon(), desc, qfalse );
+	UI_DrawArmoryIconDesc( rect, font, scale, color, textStyle, UI_Armory_SelectedEquipIcon(), qfalse, 0, NULL, desc, qfalse );
 }
 
 // Item_OwnerDraw_Paint doesn't true-center ownerdraw text, so center it by hand here.
@@ -3005,6 +3045,9 @@ static void UI_OwnerDraw( float x, float y, float w, float h, float text_x, floa
 		break;
 	case UI_ARMORY_EQUIP_DESC:
 		UI_DrawArmoryEquipDesc( &rect, font, scale, color, textStyle );
+		break;
+	case UI_ARMORY_WEAPON_PRICE:
+		UI_DrawArmoryWeaponPrice( &rect, font, scale, color, textStyle );
 		break;
 	case UI_CARDGAME_CHIPS:
 		UI_DrawCardGameChips( &rect, font, scale, color, textStyle );
@@ -5098,6 +5141,8 @@ static void UI_RunMenuScript( char **args ) {
 				Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, UI_Armory_SelectedBuildIndex(), "armory_loadout" );
 			}
 			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_EQUIP, -1, "armory_loadout" );
+		} else if ( Q_stricmp( name, "armoryCycleCamo" ) == 0 ) {
+			UI_Armory_CycleSelectedWeaponCamo();
 		} else if ( Q_stricmp( name, "armoryRemoveSelected" ) == 0 ) {
 			UI_Armory_RemoveSelectedBuild();
 			Menu_SetFeederSelection( NULL, FEEDER_ARMORY_BUILD, -1, "armory_loadout" );
@@ -7518,6 +7563,7 @@ void _UI_Init( qboolean inGameLoad ) {
 	UI_ResolveArenaLongnames();
 	UI_Armory_ResolveEquipTranslations();
 	UI_Armory_ResolveWeaponDescTranslations();
+	UI_Armory_ResolveCamoNameTranslations();
 	UI_CardGame_ResolveTranslations();
 
 	menuSet = UI_Cvar_VariableString( "ui_menuFiles" );

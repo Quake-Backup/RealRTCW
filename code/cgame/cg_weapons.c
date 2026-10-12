@@ -1549,6 +1549,17 @@ static qboolean CG_RW_ParseClient( int handle, weaponInfo_t *weaponInfo, int wea
 					weaponInfo->upgradedSkin = trap_R_RegisterSkin(upgradedSkin);
 				}
 			}
+
+			// "<base>_camo1.skin" .. "_camoN.skin"
+			{
+				char camoSkinPath[128];
+				int camoIdx;
+
+				for ( camoIdx = 0; camoIdx < MAX_WEAPON_CAMOS; camoIdx++ ) {
+					Com_sprintf( camoSkinPath, sizeof( camoSkinPath ), "%s_camo%d.skin", base, camoIdx + 1 );
+					weaponInfo->camoSkin[camoIdx] = trap_R_RegisterSkin( camoSkinPath );
+				}
+			}
 		} else if ( !Q_stricmp( token.string, "flashDlightColor" ) ) {
 			if ( !PC_Vec_Parse( handle, &weaponInfo->flashDlightColor ) ) {
 				return CG_RW_ParseError( handle, "expected flashDlightColor as r g b" );
@@ -3083,6 +3094,140 @@ qboolean CG_WeaponIsUpgraded(weapon_t weaponNum) {
 }
 
 /*
+==============
+CG_ParseWeaponCamos
+
+Parses cg_weaponCamos (a CSV of camo index per weapon_t, written by the armory UI)
+into cg.weaponCamoIndex[]. Missing/malformed/out-of-range entries default to 0 (no camo).
+==============
+*/
+void CG_ParseWeaponCamos( void ) {
+	const char *s = cg_weaponCamos.string;
+	int weaponNum;
+
+	for ( weaponNum = 0; weaponNum < WP_NUM_WEAPONS; weaponNum++ ) {
+		cg.weaponCamoIndex[weaponNum] = 0;
+	}
+
+	for ( weaponNum = 0; weaponNum < WP_NUM_WEAPONS && s && *s; weaponNum++ ) {
+		int value = atoi( s );
+
+		if ( value >= 0 && value <= MAX_WEAPON_CAMOS ) {
+			cg.weaponCamoIndex[weaponNum] = value;
+		}
+
+		s = strchr( s, ',' );
+		if ( s ) {
+			s++;
+		}
+	}
+}
+
+/*
+==============
+CG_TestCamo_f
+
+Cheat command: sets (or, with no argument, cycles) the camo on the weapon
+currently in the player's hands, writing straight into cg_weaponCamos the
+same way the armory UI does. Lets camo art be test-fired in the field
+without a trip through the armory.
+==============
+*/
+void CG_TestCamo_f( void ) {
+	weapon_t weaponNum;
+	const weaponInfo_t *weapon;
+	char buf[MAX_CVAR_VALUE_STRING];
+	char out[MAX_CVAR_VALUE_STRING];
+	const char *s;
+	int i, camoIndex;
+
+	trap_Cvar_VariableStringBuffer( "sv_cheats", buf, sizeof( buf ) );
+	if ( !atoi( buf ) ) {
+		CG_Printf( "testcamo: cheats must be enabled (devmap/spdevmap)\n" );
+		return;
+	}
+
+	if ( !cg.snap ) {
+		return;
+	}
+
+	weaponNum = (weapon_t)cg.snap->ps.weapon;
+	if ( weaponNum <= WP_NONE || weaponNum >= WP_NUM_WEAPONS ) {
+		return;
+	}
+	weapon = &cg_weapons[weaponNum];
+
+	if ( trap_Argc() > 1 ) {
+		camoIndex = atoi( CG_Argv( 1 ) );
+	} else {
+		camoIndex = ( cg.weaponCamoIndex[weaponNum] + 1 ) % ( MAX_WEAPON_CAMOS + 1 );
+	}
+	if ( camoIndex < 0 || camoIndex > MAX_WEAPON_CAMOS ) {
+		camoIndex = 0;
+	}
+	if ( camoIndex > 0 && !weapon->camoSkin[camoIndex - 1] ) {
+		CG_Printf( "testcamo: weapon %d has no camo skin %d\n", weaponNum, camoIndex );
+		return;
+	}
+
+	trap_Cvar_VariableStringBuffer( "cg_weaponCamos", buf, sizeof( buf ) );
+	s = buf;
+	out[0] = '\0';
+
+	for ( i = 0; i < WP_NUM_WEAPONS; i++ ) {
+		int value = ( i == weaponNum ) ? camoIndex : ( ( s && *s ) ? atoi( s ) : 0 );
+
+		if ( value < 0 || value > MAX_WEAPON_CAMOS ) {
+			value = 0;
+		}
+		if ( i > 0 ) {
+			Q_strcat( out, sizeof( out ), "," );
+		}
+		Q_strcat( out, sizeof( out ), va( "%d", value ) );
+
+		if ( s ) {
+			s = strchr( s, ',' );
+			if ( s ) {
+				s++;
+			}
+		}
+	}
+	trap_Cvar_Set( "cg_weaponCamos", out );
+
+	CG_Printf( "testcamo: weapon %d camo set to %d\n", weaponNum, camoIndex );
+}
+
+/*
+==============
+CG_CustomWeaponSkin
+
+Picks which skin (if any) should override a held weapon part's base skin for
+the local player: a chosen camo takes priority over the "upgraded" cosmetic
+skin, which in turn takes priority over the plain hands skin. Returns 0 (no
+override, use the model's own per-surface shaders) if none apply.
+==============
+*/
+static qhandle_t CG_CustomWeaponSkin( weapon_t weaponNum, const weaponInfo_t *weapon ) {
+	int camoIdx = cg.weaponCamoIndex[weaponNum];
+
+	if ( camoIdx > 0 && camoIdx <= MAX_WEAPON_CAMOS && weapon->camoSkin[camoIdx - 1] ) {
+		return weapon->camoSkin[camoIdx - 1];
+	}
+
+	if ( CG_WeaponIsUpgraded( weaponNum ) ) {
+		if ( weapon->upgradedMapSkin ) {
+			return weapon->upgradedMapSkin;
+		}
+		if ( weapon->upgradedSkin ) {
+			return weapon->upgradedSkin;
+		}
+		return 0;
+	}
+
+	return weapon->handsSkin;
+}
+
+/*
 =============
 CG_AddPlayerWeapon
 
@@ -3264,21 +3409,7 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 	{
 		if (isPlayer)
 		{
-			if (CG_WeaponIsUpgraded(weaponNum))
-			{
-				if (weapon->upgradedMapSkin)
-				{
-					gun.customSkin = weapon->upgradedMapSkin;
-				}
-				else if (weapon->upgradedSkin)
-				{
-					gun.customSkin = weapon->upgradedSkin;
-				}
-			}
-			else if (weapon->handsSkin)
-			{
-				gun.customSkin = weapon->handsSkin;
-			}
+			gun.customSkin = CG_CustomWeaponSkin( weaponNum, weapon );
 		}
 		CG_AddWeaponWithPowerups(&gun, cent->currentState.powerups, ps, cent);
 	}
@@ -3317,21 +3448,7 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 
 			if (isPlayer)
 			{
-				if (CG_WeaponIsUpgraded(weaponNum))
-				{
-					if (weapon->upgradedMapSkin)
-					{
-						barrel.customSkin = weapon->upgradedMapSkin;
-					}
-					else if (weapon->upgradedSkin)
-					{
-						barrel.customSkin = weapon->upgradedSkin;
-					}
-				}
-				else if (weapon->handsSkin)
-				{
-					barrel.customSkin = weapon->handsSkin;
-				}
+				barrel.customSkin = CG_CustomWeaponSkin( weaponNum, weapon );
 			}
 
 			// check for spinning

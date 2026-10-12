@@ -22,6 +22,8 @@ static qhandle_t armoryEquipIcons[ARMORY_MAX_EQUIP];
 static int selectedWeaponIndex = -1;
 static int selectedEquipIndex = -1;
 static int selectedBuildIndex = -1;
+static qboolean lastWeaponSelectWasBuild = qfalse;   // for the camo picker
+static qboolean armoryCamoAvailableCvarValue = qfalse;   // mirrors ui_armoryCamoAvailable
 
 static int UI_Armory_RawEquipIndex( int compactIndex );   // defined below; needed by UI_Armory_Reset above it
 
@@ -39,6 +41,9 @@ void UI_Armory_Reset( void ) {
 	selectedWeaponIndex = -1;
 	selectedEquipIndex = -1;
 	selectedBuildIndex = -1;
+	lastWeaponSelectWasBuild = qfalse;
+	armoryCamoAvailableCvarValue = qfalse;
+	trap_Cvar_Set( "ui_armoryCamoAvailable", "0" );
 
 	// perma items are mapper-forced picks: always in the build, regardless of what triggered this reset
 	for ( i = 0; i < armoryRoster.numWeapons; i++ ) {
@@ -487,6 +492,7 @@ void UI_Armory_SelectBuild( int index ) {
 		return;   // mapper-forced pick: not selectable
 	}
 	selectedBuildIndex = index;
+	lastWeaponSelectWasBuild = qtrue;
 }
 
 void UI_Armory_RemoveSelectedBuild( void ) {
@@ -677,6 +683,7 @@ void UI_Armory_SelectWeapon( int index ) {
 		return;
 	}
 	selectedWeaponIndex = index;
+	lastWeaponSelectWasBuild = qfalse;
 }
 
 void UI_Armory_SelectEquip( int index ) {
@@ -736,6 +743,7 @@ void UI_Armory_AddSelectedWeapon( void ) {
 	}
 	selectedBuildIndex = UI_Armory_BuildIndexForWeapon( index );   // so Remove works right away
 	selectedWeaponIndex = -1;   // it just left the source list
+	lastWeaponSelectWasBuild = qtrue;
 }
 
 void UI_Armory_AddSelectedEquip( void ) {
@@ -752,18 +760,32 @@ void UI_Armory_AddSelectedEquip( void ) {
 	selectedEquipIndex = -1;
 }
 
+// which weapon the panel (icon/desc/price/camo) agrees on - same "last list clicked" rule as camo
+static int UI_Armory_ActiveWeaponRawIndex( void ) {
+	int weaponIndex, equipIndex;
+
+	if ( lastWeaponSelectWasBuild ) {
+		if ( selectedBuildIndex >= 0 && UI_Armory_ResolveBuildIndex( selectedBuildIndex, &weaponIndex, &equipIndex ) && weaponIndex >= 0 ) {
+			return weaponIndex;
+		}
+		return -1;
+	}
+	return selectedWeaponIndex;
+}
+
 qhandle_t UI_Armory_SelectedWeaponIcon( void ) {
-	return UI_Armory_WeaponIcon( selectedWeaponIndex );
+	return UI_Armory_WeaponIcon( UI_Armory_ActiveWeaponRawIndex() );
 }
 
 // Reads the cache built by UI_Armory_ResolveWeaponDescTranslations() - see its comment for why.
 const char *UI_Armory_SelectedWeaponDesc( void ) {
+	int rawIndex = UI_Armory_ActiveWeaponRawIndex();
 	int weaponNum;
 
-	if ( selectedWeaponIndex < 0 || selectedWeaponIndex >= armoryRoster.numWeapons ) {
+	if ( rawIndex < 0 || rawIndex >= armoryRoster.numWeapons ) {
 		return "";
 	}
-	weaponNum = armoryRoster.weapons[selectedWeaponIndex];
+	weaponNum = armoryRoster.weapons[rawIndex];
 	if ( !armoryWeaponDescsResolved || weaponNum <= WP_NONE || weaponNum >= WP_NUM_WEAPONS ) {
 		return "";
 	}
@@ -772,17 +794,21 @@ const char *UI_Armory_SelectedWeaponDesc( void ) {
 
 // Points required to add the currently highlighted weapon to the build; -1 if nothing is selected.
 int UI_Armory_SelectedWeaponCost( void ) {
-	if ( selectedWeaponIndex < 0 || selectedWeaponIndex >= armoryRoster.numWeapons ) {
+	int rawIndex = UI_Armory_ActiveWeaponRawIndex();
+
+	if ( rawIndex < 0 || rawIndex >= armoryRoster.numWeapons ) {
 		return -1;
 	}
-	return BG_Armory_GetWeaponCost( armoryRoster.weapons[selectedWeaponIndex] );
+	return BG_Armory_GetWeaponCost( armoryRoster.weapons[rawIndex] );
 }
 
 qboolean UI_Armory_SelectedWeaponIsWide( void ) {
-	if ( selectedWeaponIndex < 0 || selectedWeaponIndex >= armoryRoster.numWeapons ) {
+	int rawIndex = UI_Armory_ActiveWeaponRawIndex();
+
+	if ( rawIndex < 0 || rawIndex >= armoryRoster.numWeapons ) {
 		return qfalse;
 	}
-	return BG_Armory_IsWideIcon( armoryRoster.weapons[selectedWeaponIndex] );
+	return BG_Armory_IsWideIcon( armoryRoster.weapons[rawIndex] );
 }
 
 qhandle_t UI_Armory_SelectedEquipIcon( void ) {
@@ -811,4 +837,177 @@ int UI_Armory_SelectedEquipCost( void ) {
 	}
 	def = UI_Armory_EquipDef( selectedEquipIndex );
 	return def ? BG_Armory_GetEquipCost( def ) : -1;
+}
+
+//===================== camo: persistent per-weapon cosmetic preference =====================
+
+#define CAMO_CVAR_NAME "cg_weaponCamos"
+
+static qhandle_t armoryCamoPatternIcons[MAX_WEAPON_CAMOS];   // lazy-loaded, indexed by camoIndex-1
+
+// excludes throwables/explosives/signals and internal AI-only weapon codes
+static qboolean UI_Armory_WeaponIsPaintable( weapon_t weaponNum ) {
+	if ( weaponNum == WP_KNIFE ) {
+		return qfalse;
+	}
+	if ( weaponNum >= WP_GRENADE_LAUNCHER && weaponNum <= WP_SMOKE_BOMB ) {
+		return qfalse;
+	}
+	if ( weaponNum >= WP_DUMMY_MG42 ) {
+		return qfalse;
+	}
+	return qtrue;
+}
+
+// drives weaponsCamoTag's showCvar, so it hides instead of just no-opping
+static weapon_t UI_Armory_CamoTargetWeapon( void ) {
+	int rawIndex = UI_Armory_ActiveWeaponRawIndex();
+	weapon_t weaponNum = WP_NONE;
+	qboolean available;
+
+	if ( rawIndex >= 0 && rawIndex < armoryRoster.numWeapons ) {
+		weaponNum = (weapon_t)armoryRoster.weapons[rawIndex];
+		if ( !UI_Armory_WeaponIsPaintable( weaponNum ) ) {
+			weaponNum = WP_NONE;
+		}
+	}
+
+	available = ( weaponNum != WP_NONE );
+	if ( available != armoryCamoAvailableCvarValue ) {
+		armoryCamoAvailableCvarValue = available;
+		trap_Cvar_Set( "ui_armoryCamoAvailable", available ? "1" : "0" );
+	}
+	return weaponNum;
+}
+
+static int UI_Armory_GetWeaponCamoByNum( weapon_t weaponNum ) {
+	char buf[MAX_CVAR_VALUE_STRING];
+	const char *s;
+	int i, value;
+
+	if ( weaponNum <= WP_NONE || weaponNum >= WP_NUM_WEAPONS ) {
+		return 0;
+	}
+
+	trap_Cvar_VariableStringBuffer( CAMO_CVAR_NAME, buf, sizeof( buf ) );
+	s = buf;
+	for ( i = 0; i < weaponNum && s; i++ ) {
+		s = strchr( s, ',' );
+		if ( s ) {
+			s++;
+		}
+	}
+	if ( !s || !*s ) {
+		return 0;
+	}
+	value = atoi( s );
+	if ( value < 0 || value > MAX_WEAPON_CAMOS ) {
+		return 0;
+	}
+	return value;
+}
+
+static void UI_Armory_SetWeaponCamoByNum( weapon_t weaponNum, int camoIndex ) {
+	char buf[MAX_CVAR_VALUE_STRING];
+	char out[MAX_CVAR_VALUE_STRING];
+	const char *s;
+	int i;
+
+	if ( weaponNum <= WP_NONE || weaponNum >= WP_NUM_WEAPONS ) {
+		return;
+	}
+
+	trap_Cvar_VariableStringBuffer( CAMO_CVAR_NAME, buf, sizeof( buf ) );
+	s = buf;
+	out[0] = '\0';
+
+	for ( i = 0; i < WP_NUM_WEAPONS; i++ ) {
+		int value;
+
+		if ( i == weaponNum ) {
+			value = camoIndex;
+		} else {
+			value = ( s && *s ) ? atoi( s ) : 0;
+		}
+		if ( value < 0 || value > MAX_WEAPON_CAMOS ) {
+			value = 0;
+		}
+
+		if ( i > 0 ) {
+			Q_strcat( out, sizeof( out ), "," );
+		}
+		Q_strcat( out, sizeof( out ), va( "%d", value ) );
+
+		if ( s ) {
+			s = strchr( s, ',' );
+			if ( s ) {
+				s++;
+			}
+		}
+	}
+
+	trap_Cvar_Set( CAMO_CVAR_NAME, out );
+}
+
+int UI_Armory_SelectedWeaponCamoIndex( void ) {
+	return UI_Armory_GetWeaponCamoByNum( UI_Armory_CamoTargetWeapon() );
+}
+
+static const char *armoryCamoNameDefaults[MAX_WEAPON_CAMOS] = {
+	"Woodland", "Autumn", "Digital", "Oak Leaf", "Desert", "Desert Rose", "Frog Skin", "Urban Gray",
+};
+static char     armoryCamoNames[MAX_WEAPON_CAMOS][32];
+static qboolean armoryCamoNamesResolved = qfalse;
+
+// "ARMORY_CAMO_01".."_08" in text.txt; must run before UI_FreeTranslateTable(), like the resolvers above
+void UI_Armory_ResolveCamoNameTranslations( void ) {
+	int i;
+
+	for ( i = 0; i < MAX_WEAPON_CAMOS; i++ ) {
+		char key[32];
+		const char *translated;
+
+		Com_sprintf( key, sizeof( key ), "ARMORY_CAMO_%02d", i + 1 );
+		translated = TranslateTable_Find( key );
+		Q_strncpyz( armoryCamoNames[i], translated ? translated : armoryCamoNameDefaults[i], sizeof( armoryCamoNames[i] ) );
+	}
+	armoryCamoNamesResolved = qtrue;
+}
+
+const char *UI_Armory_SelectedWeaponCamoName( void ) {
+	int camoIndex;
+
+	if ( UI_Armory_CamoTargetWeapon() == WP_NONE ) {
+		return "";
+	}
+	camoIndex = UI_Armory_SelectedWeaponCamoIndex();
+	if ( camoIndex <= 0 || camoIndex > MAX_WEAPON_CAMOS ) {
+		return "None";
+	}
+	return armoryCamoNamesResolved ? armoryCamoNames[camoIndex - 1] : armoryCamoNameDefaults[camoIndex - 1];
+}
+
+// shared across every weapon - same 8 camouflage_0N.png pattern swatches regardless of which weapon is selected
+qhandle_t UI_Armory_SelectedWeaponCamoIcon( void ) {
+	int camoIndex = UI_Armory_SelectedWeaponCamoIndex();
+
+	if ( camoIndex <= 0 || camoIndex > MAX_WEAPON_CAMOS ) {
+		return 0;
+	}
+	if ( !armoryCamoPatternIcons[camoIndex - 1] ) {
+		armoryCamoPatternIcons[camoIndex - 1] = trap_R_RegisterShaderNoMip( va( "camos/camouflage_%02d.png", camoIndex ) );
+	}
+	return armoryCamoPatternIcons[camoIndex - 1];
+}
+
+void UI_Armory_CycleSelectedWeaponCamo( void ) {
+	weapon_t weaponNum = UI_Armory_CamoTargetWeapon();
+	int camoIndex;
+
+	if ( weaponNum == WP_NONE ) {
+		return;
+	}
+	camoIndex = UI_Armory_GetWeaponCamoByNum( weaponNum );
+	camoIndex = ( camoIndex + 1 ) % ( MAX_WEAPON_CAMOS + 1 );
+	UI_Armory_SetWeaponCamoByNum( weaponNum, camoIndex );
 }

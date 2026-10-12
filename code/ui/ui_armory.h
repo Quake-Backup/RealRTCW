@@ -20,6 +20,7 @@ void UI_Armory_LoadRosterForCurrentMap( void );
 // Must run before UI_FreeTranslateTable() frees the table.
 void UI_Armory_ResolveEquipTranslations( void );
 void UI_Armory_ResolveWeaponDescTranslations( void );
+void UI_Armory_ResolveCamoNameTranslations( void );
 
 const char  *UI_Armory_WeaponName( int index );
 qhandle_t   UI_Armory_WeaponIcon( int index );
@@ -77,5 +78,11 @@ void UI_Armory_Randomize( void );
 
 // Fills out (size outSize) with "sp_loadout_confirm <weapons> <equip>\n"
 void UI_Armory_BuildConfirmCommand( char *out, int outSize );
+
+// Camo: persistent per-weapon preference, stored in cg_weaponCamos, not the build state above.
+int         UI_Armory_SelectedWeaponCamoIndex( void );
+const char  *UI_Armory_SelectedWeaponCamoName( void );
+qhandle_t   UI_Armory_SelectedWeaponCamoIcon( void );   // 0 if no camo selected
+void        UI_Armory_CycleSelectedWeaponCamo( void );
 
 #endif // __UI_ARMORY_H__
